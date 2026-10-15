@@ -15,7 +15,7 @@ npm run doctor
 npm start
 ```
 
-Windows PowerShell에서는 위 `npm`을 `npm.cmd`로 실행한다. 전체 설치·빌드는 `npm run bootstrap`으로도 가능하다. 기본값은 Mock, 서버는 127.0.0.1:4173에만 바인딩한다. 종료는 해당 터미널에서 Ctrl+C다. 공통 React UI를 사용하며 실제 연결 상태·OS/아키텍처·최근 수집 시각을 별도 패널에 표시한다.
+Windows PowerShell에서는 위 `npm`을 `npm.cmd`로 실행한다. 전체 설치·빌드는 `npm run bootstrap`으로도 가능하다. 클라우드 실행 시 `ORBIT_ENVIRONMENT=cloud-development`로 환경 이름을 명시할 수 있다(표시는 인증 증거가 아니다). 기본값은 Mock, 서버는 127.0.0.1:4173에만 바인딩한다. 종료는 해당 터미널에서 Ctrl+C다. 공통 React UI를 사용하며 실제 연결 상태·OS/아키텍처·최근 수집 시각을 별도 패널에 표시한다.
 
 - [macOS 설치](docs/install/macos.md)
 - [Windows 네이티브 / WSL 설치](docs/install/windows.md)

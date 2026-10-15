@@ -28,6 +28,7 @@ CI는 `.github/workflows/cross-platform.yml`에 ubuntu-latest/windows-latest/mac
 - 원본 webview 86 + server 550 + package-contract 7 = 643 tests 성공. 원본 compile 성공. upstream useEffect dependency warning 1개는 기존 상태이며 custom lint 경고는 없다.
 - Playwright Mock: 동시 캐릭터 6, 명시 상태 8개, 프로젝트/에이전트 필터, 배치 유지, zoom, 제거/재생성, timed scenario, desktop/mobile, JS/HTTP 오류 없음.
 - 수신 패널: 합성 인증 Hook → 변경 없는 원본 Claude Provider → source=fixture, 환경/최근 시각/미검증 표시, 서버 끊김. 실제 CLI/계정/세션이 아니다.
+- GitHub origin/work의 구현 커밋 `3cfabad96973feb0a2dee601bc8281bfbc1e2c6d`를 `/tmp`의 공백·한글·작은따옴표 경로에 새 clone하고 `npm run bootstrap`, Mock smoke, 단위 11개, 통합 5개를 다시 실행해 통과했다. 최종 후속 커밋은 이 검증 기록 문서만 보강한다.
 - 알려진 credential/private-key 패턴과 case/Unicode 경로 충돌 검사 통과. 패턴 검사는 모든 민감정보 부재의 증명이 아니다. ignored token registry·개인 로그·node_modules·artifacts는 Git 전달에 포함하지 않는다.
 - protected Claude/OMP 경로 baseline 비교 변화 없음. 기존 Claude Code/Command Code/DeepSeek/OMP 설정과 스크립트 변경 없음.
 

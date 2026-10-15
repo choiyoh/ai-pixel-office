@@ -7,7 +7,7 @@
 | npm scripts / Bash | app test의 shell glob을 Node 파일 열거로 대체. npm bootstrap은 Node orchestration. .sh는 선택 POSIX wrapper로만 남김. upstream의 cd/&&/npm-run-all은 원본 유지 | Linux 실행, Windows/macOS CI 준비 |
 | npm.cmd | Node 공식 child_process 문서상 batch 직접 exec 불가. 내부 npm은 process.execPath + npm-cli.js, shell:false로 호출 | simulated Windows + Linux 실제 설치 |
 | CLI .exe/.cmd/.bat | doctor는 PATH/확장자 존재만 조사. 미래 launcher는 batch를 verified Node entry 없이는 거부 | Command Code 실제 실행 없음 |
-| 사용자/작업 경로 | 런타임은 import.meta.url, os.homedir, path 사용. /workspace나 특정 /Users 경로에 실행 의존 없음. docs의 클라우드 이력/fixture 경로는 실행 의존 아님 | 공백 경로 clone/install smoke 예정·결과는 보고서 |
+| 사용자/작업 경로 | 런타임은 import.meta.url, os.homedir, path 사용. /workspace나 특정 /Users 경로에 실행 의존 없음. docs의 클라우드 이력/fixture 경로는 실행 의존 아님 | GitHub 공백/한글/apostrophe 경로 clone/install/build/smoke 통과 |
 | 설정 경로 | Windows LOCALAPPDATA/Orbit Works, macOS Library/Application Support/Orbit Works, Linux XDG_STATE_HOME 또는 ~/.local/state/orbit-works | 세 OS simulated 경로 tests |
 | Claude / WSL | 실제 프로세스의 home 또는 명시 CLAUDE_CONFIG_DIR. native Windows와 WSL 자동 공유/변환 금지 | 실 Claude와 WSL 미검증 |
 | 파일 권한 | POSIX uid/mode, Windows SID 기반 ACL 어댑터. 새 Orbit 디렉터리만 보호하고 기존 ACL은 검사·거부 | Windows 실제 ACL은 CI/실기 필요 |
@@ -33,3 +33,5 @@ Node 22.23.3 공식 SHASUMS256 목록에서 macOS arm64/x64, Windows arm64/x64, 
 - Command Code: https://commandcode.ai/docs (사용자 제공, 이 클라우드 proxy 403)
 
 Claude 공식 README에 Windows 설치 경로가 있다는 사실은 native Hook 실행 호스트나 특정 Claude 버전의 세션 동작 검증이 아니다. 실제 대상 머신에서 공식 문서와 설치 버전을 확인해야 한다.
+
+원본 전체의 확장 개발/e2e 도구에는 POSIX mock wrapper와 macOS `security` keychain fixture가 남아 있다. Orbit 실행이나 이번 CI에서는 해당 VS Code/e2e keychain 도구를 실행하지 않는다. 원본의 OS 전용 보조 도구 전체를 이식한 것으로 보고하지 않는다. upstream codegen은 Windows quote 분기를 이미 포함한다.
