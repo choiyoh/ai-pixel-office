@@ -1,6 +1,7 @@
 import {fork} from 'node:child_process';
 import {createHash,randomBytes,timingSafeEqual} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {stopOwnedChild} from '../platform/runtime.mjs';
 import {sanitizeClaude} from './claude-input.mjs';
 export function makeReceiver({source='live',maxSessions=100}={}){
  const token=randomBytes(32).toString('hex'),sessions=new Map();
@@ -39,7 +40,7 @@ export function makeReceiver({source='live',maxSessions=100}={}){
    sessions.set(sessionKey,{sessionKey,providerId:'claude',name:`Claude · ${sessionKey.slice(0,6)}`,source,kind,status,lastEventAt:at,sequence:++sequence});lastEventAt=at;
    return {accepted:true};
   },
-  snapshot(){return {source,validation:'unverified-on-real-mac',lastEventAt,sequence,sessions:[...sessions.values()]};},
-  async close(){failPending();if(worker){const child=worker;worker=null;child.kill('SIGTERM');await new Promise(resolve=>child.once('exit',resolve));}}
+  snapshot(){return {source,validation:'unverified-on-real-environment',lastEventAt,sequence,sessions:[...sessions.values()]};},
+  async close(){failPending();if(worker){const child=worker;worker=null;await stopOwnedChild(child);}}
  };
 }

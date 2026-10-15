@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
+# Optional POSIX convenience wrapper. Windows uses npm run bootstrap directly.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-npm ci --no-audit --no-fund
-npm run setup
-npm run build
+npm run bootstrap

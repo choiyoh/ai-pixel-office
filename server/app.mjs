@@ -2,12 +2,13 @@ import Fastify from 'fastify';
 import staticFiles from '@fastify/static';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import {stateRoot as getStateRoot,runtimeInfo} from '../platform/runtime.mjs';
+import {ensurePrivateDirectory,writePrivateExclusive} from '../platform/private-files.mjs';
 import {fileURLToPath} from 'node:url';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {makeReceiver} from './receiver.mjs';
 
-export async function createApp({mode='mock',source='live',stateDir,environment=process.platform==='darwin'?'mac-local':'linux-cloud-dev'}={}){
+export async function createApp({mode='mock',source='live',stateDir,environment=runtimeInfo().environment}={}){
  if(!['mock','claude-local'].includes(mode))throw Error('Unsupported ORBIT_MODE');
  const app=Fastify({logger:false,bodyLimit:65536});
  const receiver=mode==='claude-local'?makeReceiver({source}):null;
@@ -26,10 +27,10 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
    if(a.length!==b.length||!timingSafeEqual(a,b))return reply.code(401).send({error:'local-session-required'});
   }
  });
- app.get('/api/health',()=>({status:'ok',mode:mode==='mock'?'mock-only':'claude-local-prepared',providersConnected:receiver?.snapshot().sessions.length?1:0,realMacVerified:false}));
+ app.get('/api/health',()=>({status:'ok',mode:mode==='mock'?'mock-only':'claude-local-prepared',providersConnected:receiver?.snapshot().sessions.length?1:0,realMacVerified:false,realEnvironmentVerified:false}));
  app.get('/api/connection',()=>{
   const snapshot=receiver?.snapshot();
-  return {mode,environment,platform:process.platform,arch:process.arch,node:process.versions.node,connection:receiver?(snapshot.lastEventAt?'events-received':'awaiting-events'):'mock-only',source:snapshot?.source??'mock',lastEventAt:snapshot?.lastEventAt??null,realMacVerified:false};
+  return {mode,...runtimeInfo(),environment,node:process.versions.node,connection:receiver?(snapshot.lastEventAt?'events-received':'awaiting-events'):'mock-only',source:snapshot?.source??'mock',lastEventAt:snapshot?.lastEventAt??null,realMacVerified:false,realEnvironmentVerified:false};
  });
  app.get('/api/events',()=>receiver?.snapshot()??{source:'mock',validation:'not-live',lastEventAt:null,sequence:0,sessions:[]});
  app.post('/api/hooks/:providerId',async(request,reply)=>{
@@ -46,16 +47,12 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
   await app.listen({host:'127.0.0.1',port});
   if(receiver){
    try{
-    const stateRoot=stateDir??path.join(os.homedir(),'.orbit-works');
-    fs.mkdirSync(stateRoot,{recursive:true,mode:0o700});
-    const rootStat=fs.lstatSync(stateRoot);
-    if(!rootStat.isDirectory()||rootStat.isSymbolicLink()||(rootStat.mode&0o077)!==0||(typeof process.getuid==='function'&&rootStat.uid!==process.getuid()))throw Error('Unsafe state directory');
+    const stateRoot=stateDir??getStateRoot();
+    ensurePrivateDirectory(stateRoot);
     const directory=path.join(stateRoot,'runtime');
-    fs.mkdirSync(directory,{recursive:true,mode:0o700});
-    const stat=fs.lstatSync(directory);
-    if(!stat.isDirectory()||stat.isSymbolicLink()||(stat.mode&0o077)!==0||(typeof process.getuid==='function'&&stat.uid!==process.getuid()))throw Error('Unsafe runtime directory');
+    ensurePrivateDirectory(directory);
     registry=path.join(directory,'receiver.json');
-    fs.writeFileSync(registry,JSON.stringify({port:app.server.address().port,token:receiver.token,pid:process.pid}),{flag:'wx',mode:0o600});
+    writePrivateExclusive(registry,{port:app.server.address().port,token:receiver.token,pid:process.pid});
    }catch(error){registry=null;await app.close();throw error;}
   }
  }};
@@ -63,6 +60,10 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const instance=await createApp({mode:process.env.ORBIT_MODE??'mock',stateDir:process.env.ORBIT_STATE_DIR});
  await instance.listen(Number(process.env.PORT??4173));
- console.log('Orbit Works ready on loopback. Real Mac validation remains pending.');
- for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{void instance.app.close();});
+ console.log('Orbit Works ready on loopback. Real OS/Claude validation remains pending.');
+ process.send?.({type:'orbit:ready',port:instance.app.server.address().port});
+ let closing=false;
+ const shutdown=async()=>{if(closing)return;closing=true;await instance.app.close();process.disconnect?.();};
+ process.on('message',message=>{if(message?.type==='orbit:shutdown')void shutdown();});
+ for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{void shutdown();});
 }

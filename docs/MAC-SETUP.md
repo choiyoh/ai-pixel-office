@@ -1,3 +1,5 @@
+> 이 문서는 이전 Mac 준비 이력입니다. 현재 설치는 [macOS](install/macos.md), 전체 결과는 [크로스플랫폼 보고서](P2-A-CROSS-PLATFORM.md)를 우선합니다.
+
 # P2-A Mac 설치·실행·실환경 검증 인계
 
 **현재 판정은 “Linux에서 준비·합성 검증 완료, Mac 실환경 미검증”이다.** macOS/Apple Silicon 실행, 실제 Claude 이벤트, 계정 인증, 모바일 접근을 성공했다고 판단하지 않는다. 아래 절차는 대상 Mac에서 별도로 실행해야 한다.

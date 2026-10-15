@@ -1,0 +1,45 @@
+name: Cross-platform readiness
+on:
+  push:
+    branches: [main, work]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node-local-app:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: .cache/ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Record actual runner architecture
+        run: node -p 'JSON.stringify({platform:process.platform,arch:process.arch,node:process.versions.node})'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run setup
+      - run: npm run check:source
+      - run: npm run verify:vendor
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:integration
+      - run: npm run test:smoke
+      - run: npm run test:upstream
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - run: npm run test:connection-browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-${{ matrix.os }}
+          path: artifacts/

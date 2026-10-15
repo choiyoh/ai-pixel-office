@@ -1,3 +1,5 @@
+> 이전 Mac 준비 단계의 보고서입니다. 이후 GitHub push 및 크로스플랫폼 변경 결과는 [현재 보고서](P2-A-CROSS-PLATFORM.md)를 우선합니다.
+
 # Orbit Works P2-A — Cloud 준비 결과와 Mac 인계
 
 판정: **클라우드에서 Mac 실행·Claude 연결을 준비하는 코드와 합성 검증을 수행했다. 실제 Mac 설치·Claude 연결·모바일 원격 접근은 미완료/미검증이다. 전체 실환경 연동 완료로 판정하지 않는다.**

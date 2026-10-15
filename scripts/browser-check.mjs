@@ -7,7 +7,7 @@ const errors=[],network=[];
 page.on('pageerror',e=>errors.push(e.message));
 page.on('response',r=>{if(r.status()>=400)network.push(`${r.status()} ${r.url()}`);});
 try{
- await page.goto('http://127.0.0.1:4173');
+ await page.goto(process.env.ORBIT_BASE_URL??'http://127.0.0.1:4173');
  await expect(page.getByTestId('agent-6')).toBeVisible();
  await expect(page.locator('.agent-card')).toHaveCount(6);
  await expect.poll(async()=>JSON.parse(await page.locator('canvas').getAttribute('data-actors')).length).toBe(6);

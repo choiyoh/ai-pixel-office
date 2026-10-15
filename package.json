@@ -1,6 +1,6 @@
 {
   "name": "ai-pixel-office",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,17 +8,20 @@
     "dev": "vite --host 127.0.0.1",
     "build": "npm run assets && npm run typecheck && vite build && node scripts/build-worker.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src scripts tests server",
-    "test": "tsx --test tests/*.test.ts",
+    "lint": "eslint src scripts tests server platform",
+    "test": "node scripts/tasks.mjs unit",
     "start": "node server/app.mjs",
-    "test:browser": "node scripts/browser-check.mjs",
+    "test:browser": "node scripts/mock-browser.mjs",
     "setup": "node scripts/setup.mjs",
     "verify:vendor": "node scripts/verify-vendor.mjs",
-    "test:integration": "node --test tests/*.integration.mjs",
+    "test:integration": "node scripts/tasks.mjs integration",
     "hooks:plan": "node scripts/hooks-plan.mjs",
     "doctor": "node scripts/doctor.mjs",
     "test:upstream": "node scripts/test-upstream.mjs",
-    "test:connection-browser": "node scripts/connection-browser.mjs"
+    "test:connection-browser": "node scripts/connection-browser.mjs",
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "test:smoke": "node scripts/smoke.mjs",
+    "check:source": "node scripts/check-source.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.2",

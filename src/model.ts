@@ -9,7 +9,7 @@ export const roster:Agent[]=[
   {id:2,name:'DeepSeek Dev',team:'개발팀',project:'Orbit Platform',palette:1,seat:'dev-2',status:'testing',task:'회귀 테스트 실행',since:0,source:'mock'},
   {id:3,name:'DeepSeek Analyst',team:'분석팀',project:'Signal Lab',palette:2,seat:'analyst',status:'analysis',task:'사용자 흐름 분석',since:0,source:'mock'},
   {id:4,name:'Hermes',team:'연구팀',project:'Signal Lab',palette:3,seat:'research',status:'analysis',task:'검색 전략 연구',since:0,source:'mock'},
-  {id:5,name:'OpenCode',team:'운영팀',project:'Orbit Platform',palette:4,seat:'ops',status:'approval',task:'릴리스 승인 요청',since:0,source:'mock'},
+  {id:5,name:'Command Code',team:'운영팀',project:'Orbit Platform',palette:4,seat:'ops',status:'approval',task:'릴리스 승인 요청',since:0,source:'mock'},
   {id:6,name:'Nova',team:'운영팀',project:'Studio Kit',palette:5,seat:'other',status:'idle',task:'다음 업무를 기다리는 중',since:0,source:'mock'},
 ];
 export function reduceAgents(agents:Agent[],event:OfficeEvent):Agent[]{

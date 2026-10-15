@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {root} from './verify-vendor.mjs';
+const task=process.argv[2];
+const files=fs.readdirSync(path.join(root,'tests')).sort();
+const groups={unit:['--import','tsx','--test',...files.filter(f=>f.endsWith('.test.ts')).map(f=>path.join(root,'tests',f))],integration:['--test',...files.filter(f=>f.endsWith('.integration.mjs')).map(f=>path.join(root,'tests',f))]};
+if(!groups[task])throw Error('Unknown task');
+const result=spawnSync(process.execPath,groups[task],{cwd:root,stdio:'inherit',shell:false});
+process.exitCode=result.status??1;

@@ -22,7 +22,7 @@ export function ConnectionPanel(){
  const last=connection?.lastEventAt;
  return <section className="connection-panel" aria-label="실행 환경 및 연결 상태">
   <div className="connection-summary"><strong>{offline?'● 서버 연결 끊김':connection?.mode==='claude-local'?'● Claude 로컬 수신 준비':'● MOCK 개발 모드'}</strong><span data-testid="execution-environment">{import.meta.env.DEV?'Vite · Mock':connection?`${connection.environment} · ${connection.platform}/${connection.arch}`:'서버 확인 중'}</span><span data-testid="last-event">최근 수집 이벤트: {last?new Date(last).toLocaleTimeString('ko-KR',{hour12:false,timeZone:officeTimezone}):'없음'}</span></div>
-  <p>사무실 캔버스는 Mock입니다. {connection?.source==='fixture'?'아래 수집 결과도 합성 통합 테스트입니다. ':''}{connection?.mode==='claude-local'?'로컬 수신기는 준비되었으며 실제 Mac·Claude 연동은 아직 미검증입니다.':'Mac localhost는 이 클라우드와 별개의 실행 환경입니다.'}</p>
+  <p>사무실 캔버스는 Mock입니다. {connection?.source==='fixture'?'아래 수집 결과도 합성 통합 테스트입니다. ':''}{connection?.mode==='claude-local'?'로컬 수신기는 준비되었으며 실제 OS·Claude 연동은 아직 미검증입니다.':'각 OS와 WSL의 localhost·설정은 별도 실행 환경입니다.'}</p>
   {sessions.length>0&&<div className="collected-sessions"><h3>별도 수집 채널 · {connection?.source==='fixture'?'TEST FIXTURE':'LIVE TRANSPORT / 실환경 미검증'}</h3>{sessions.map(s=><div key={s.sessionKey}><b>{s.name}</b><span>{labels[s.status]??'상태 미확인'}</span><time>{new Date(s.lastEventAt).toLocaleTimeString('ko-KR',{hour12:false,timeZone:officeTimezone})}</time></div>)}</div>}
  </section>;
 }

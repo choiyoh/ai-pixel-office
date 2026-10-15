@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createApp} from '../server/app.mjs';
-const stateDir=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-browser-fixture-'));
+const tempDir=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-browser-fixture-')),stateDir=path.join(tempDir,'state');
 const instance=await createApp({mode:'claude-local',source:'fixture',stateDir});
 let browser;
 fs.mkdirSync('artifacts',{recursive:true});
@@ -22,11 +22,11 @@ try{
  await expect(page.locator('.collected-sessions')).toContainText('TEST FIXTURE',{timeout:6000});
  await expect(page.locator('.collected-sessions')).toContainText('승인 요청');
  await expect(page.getByTestId('last-event')).not.toContainText('없음');
- await expect(page.getByText(/실제 Mac·Claude 연동은 아직 미검증/)).toBeVisible();
+ await expect(page.getByText(/실제 OS·Claude 연동은 아직 미검증/)).toBeVisible();
  await page.screenshot({path:'artifacts/p2-connection-prepared.png',fullPage:true});
  await instance.app.close();
  await expect(page.getByText('● 서버 연결 끊김')).toBeVisible({timeout:7000});
  expect(errors).toEqual([]);
- fs.writeFileSync('artifacts/p2-browser-result.json',JSON.stringify({status:'passed',source:'synthetic-fixture',realMacVerified:false,checks:['environment','mock/live channel separation','recent event time','unverified label','server disconnect'],errors},null,2));
+ fs.writeFileSync('artifacts/p2-browser-result.json',JSON.stringify({status:'passed',source:'synthetic-fixture',realMacVerified:false,checks:['environment','mock/live channel separation','recent event time','unverified OS label','server disconnect'],errors},null,2));
  console.log('Connection browser checks passed (synthetic only).');
-}finally{await browser?.close();await instance.app.close();fs.rmSync(stateDir,{recursive:true,force:true});}
+}finally{await browser?.close();await instance.app.close();fs.rmSync(tempDir,{recursive:true,force:true});}
