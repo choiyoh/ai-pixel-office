@@ -1,17 +1,24 @@
 {
   "name": "ai-pixel-office",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "assets": "tsx scripts/assets.ts",
     "dev": "vite --host 127.0.0.1",
-    "build": "npm run assets && npm run typecheck && vite build",
+    "build": "npm run assets && npm run typecheck && vite build && node scripts/build-worker.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts tests server",
     "test": "tsx --test tests/*.test.ts",
     "start": "node server/app.mjs",
-    "test:browser": "node scripts/browser-check.mjs"
+    "test:browser": "node scripts/browser-check.mjs",
+    "setup": "node scripts/setup.mjs",
+    "verify:vendor": "node scripts/verify-vendor.mjs",
+    "test:integration": "node --test tests/*.integration.mjs",
+    "hooks:plan": "node scripts/hooks-plan.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "test:upstream": "node scripts/test-upstream.mjs",
+    "test:connection-browser": "node scripts/connection-browser.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.2",
@@ -31,7 +38,11 @@
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.58.2",
-    "vite": "8.0.8"
+    "vite": "8.0.8",
+    "esbuild": "0.28.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=22 <23"
+  }
 }

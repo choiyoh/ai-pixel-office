@@ -1,45 +1,56 @@
 # Orbit Works · AI Pixel Office
 
-Pixel Agents 엔진을 그대로 사용하는 AI 개발회사 테마의 **Mock 전용 독립형 웹 앱**. P1-A 구현과 P1-B 설계 결과이며 실제 Provider 연결·Hook 설치·원격 배포는 포함하지 않는다.
+기존 Pixel Agents 엔진을 재사용하는 커스텀 도트 사무실. 현재 버전은 **P2-A Mac 연결 준비**이며 실제 Mac·Claude 연동 검증은 아직 완료되지 않았다.
 
-## 실행
+## 빠른 시작
 
-Node 22.23.3과 인접한 `/workspace/pixel-agents-p0` 원본 체크아웃이 필요하다. 원본 SHA는 `d1e007a9fdf3003c252d2973abe1999ae59aec33`이다. 이 클라우드는 이미 격리되어 있으므로 추가 worktree를 만들 필요가 없다.
+사용자가 준비한 Node 22(.nvmrc: 22.23.3)와 Git이 필요하다. 전역 패키지나 기존 사용자 설정을 자동 변경하지 않는다.
 
 ```bash
-export PATH=/workspace/p0-tools/node_modules/.bin:$PATH
-export npm_config_cache=/workspace/.npm-cache
-cd /workspace/pixel-agents-p0
-HUSKY=0 npm ci --no-audit --no-fund
-npm run compile
-cd /workspace/ai-pixel-office
 npm ci --no-audit --no-fund
+npm run setup
 npm run build
-npm run lint
-npm test
+npm run doctor
 npm start
 ```
 
-Fastify는 127.0.0.1:4173에만 바인딩한다. 내부 health 경로 `/api/health`는 `mode=mock-only`, `providersConnected=0`을 반환한다. 실제 API key나 Claude CLI가 필요하지 않다. 서버는 정적 파일과 health만 제공하며 업무 이벤트 endpoint는 없다. 작업 중 UI 개발은 `npm run dev`로 할 수 있다.
+기본 실행은 Mock이고 Fastify는 127.0.0.1:4173에만 바인딩한다. `vendor/pixel-agents`에 고정 upstream을 포함하므로 형제 checkout이나 `/workspace` 경로가 필요하지 않다. `npm run verify:vendor`로 원본 파일 381개의 hash를 확인한다. 새 Mac/GitHub/bundle 절차와 검증 기준은 [MAC-SETUP.md](docs/MAC-SETUP.md)에 있다. GitHub 원격에는 아직 이 로컬 커밋을 push하지 않았다.
 
-브라우저 자동 검증은 서버를 실행한 뒤 `npm run test:browser`를 실행한다. 현재 머신의 `/usr/bin/chromium`이 필요하다. 실행 결과와 데스크톱·모바일 스크린샷은 `artifacts/`에 생성된다. 원본 테스트는 `node /workspace/p0-evidence/run-isolated.cjs npm test`로 원본 checkout에서 실행해 사용자 홈과 분리한다.
+## 연결 준비
 
-## 사용
+`npm run hooks:plan`은 **읽기 전용 Dry-run**이다. 실제 settings의 추가 구간 Diff·hash·예상 backup 위치만 출력하며 쓰기는 하지 않는다. 실제 Mac에서 검토하고 별도 승인을 받기 전에는 Hook을 설치하지 않는다. `ORBIT_MODE=claude-local npm start`는 전용 수신기를 열고 사용자 전용 runtime registry를 만들지만 Hook은 설치하지 않는다. 실제 Mac에서 이 실행도 먼저 검토한다.
 
-캐릭터 또는 하단 카드를 선택하고 상태 시연 버튼을 누르면 명시적인 Mock 이벤트가 적용된다. 시나리오 재생은 약 16초 동안 전체 상태를 시연하며 중지·초기화할 수 있다. 초기화는 Mock roster와 이벤트만 초기화한다. 팀·프로젝트 필터는 사무실·카드·통계·timeline에 적용되며 다른 에이전트를 종료하지 않는다.
+기존 Claude Provider의 정규화는 별도 worker에서 재사용한다. sender와 receiver는 민감 필드를 제거한다. 수집된 세션은 Mock Canvas와 분리된 패널에 보이고 실제 환경·최근 이벤트 시각·실환경 미검증 상태를 표시한다. 실제 연결 준비의 한계와 복구 절차는 Mac 문서를 따른다.
 
-빈 좌석을 클릭하거나 inspector의 좌석 목록을 사용하면 기존 BFS 경로로 이동하고 사무실 레이아웃과 좌석을 localStorage에 저장한다. QA·회의실·휴게실에도 좌석이 있다. 이 버전에는 가구 편집 UI가 없다. 레이아웃·좌석은 같은 origin의 브라우저에서 유지되며 서버 동기화는 없다. 개발/dev와 production origin의 저장소는 서로 다르다.
+## 검증
 
-상단 완료 수는 현재 페이지 세션에서 받은 고유 완료 Mock 이벤트의 오늘 건수다. 업무·실행 시간·timeline은 시연용이며 새로고침 시 초기 roster로 돌아온다. 자동 타이머로 업무 성공을 추정하지 않는다. 연결 끊김 Mock은 캐릭터를 정지·비활성화한다. 원본 sprite cache에는 정수 배율로 렌더링한 뒤 완성된 scene을 nearest-neighbor로 화면에 맞춘다.
+```bash
+npm run lint
+npm test
+npm run test:integration
+npm run test:upstream
+# 선택한 브라우저를 프로젝트 캐시에 설치할 경우
+export PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright"
+npx playwright install chromium
+# 별도 터미널에 Mock npm start를 켠 상태
+npm run test:browser
+# fixture 서버를 직접 시작·종료하는 연결 UI 검사
+npm run test:connection-browser
+```
 
-## 구조
+시스템 Chromium을 쓸 때는 `ORBIT_BROWSER_EXECUTABLE`에 실행 파일을 지정한다. 원본 테스트는 임시 HOME에서 원본 compile 후 실행한다. 통합 테스트는 사용자 settings에 Hook을 설치하지 않으며 합성 fixture를 실제 Mac 증거로 사용하지 않는다. 화면과 JSON은 `artifacts/`에 저장된다.
 
-- `src/App.tsx`, `style.css`: 대시보드·필터·inspector·timeline.
-- `src/Canvas.tsx`, `engine.ts`: 기존 엔진 API를 호출하는 얇은 어댑터. 원본 Provider는 import하지 않는다.
-- `src/layout.ts`: 팀별 floor plan·좌석·저장 검증.
-- `src/model.ts`, `mock.ts`: Mock 모델과 재생기. 실제 live 데이터와 혼합하는 경로가 없다.
-- `scripts/assets.ts`, `public/characters/`: 원본 커스텀 캐릭터와 에셋 생성.
-- `server/app.mjs`: loopback 정적 서버.
-- `tests/office.test.ts`, `scripts/browser-check.mjs`: 상태·경로·동시 실행 및 실제 브라우저 검증.
+## 사무실 기능
 
-설계와 결과는 [P1-B 아키텍처](docs/P1-B-ARCHITECTURE.md), [P1 결과](docs/P1-REPORT.md), [에셋 출처](docs/ASSETS.md)를 참고한다. 이번 단계는 여기서 멈추며 실제 연결과 P2는 별도 승인 대상이다.
+6종 캐릭터, 팀별 업무 구역, QA·회의실·휴게실, 상태 시연, 필터·inspector·timeline, 줌·좌석 이동을 지원한다. 캐릭터나 카드를 선택하고 빈 좌석을 클릭하면 기존 BFS를 따라 이동한다. layout과 좌석은 같은 origin의 localStorage에 보존된다. 에이전트/업무 이력은 페이지 내 Mock 세션 기준이고 새로고침하면 초기 roster로 돌아간다. 완료 수는 고유 완료 Mock 이벤트의 당일 건수다.
+
+## 문서
+
+- [P2-A 결과·커밋·검증 경계](docs/P2-A-REPORT.md)
+- [Mac 설치·Hook Dry-run·복구](docs/MAC-SETUP.md)
+- [Adapter 구현 순서와 사설 원격 접근 설계](docs/ADAPTERS-AND-REMOTE.md)
+- [P1-B 원본 아키텍처 제안](docs/P1-B-ARCHITECTURE.md)
+- [P1 구현 당시 결과](docs/P1-REPORT.md)
+- [에셋 출처와 라이선스](docs/ASSETS.md)
+
+실제 Hook 설치·다른 Provider 연결·Tailscale 설정·인터넷 공개·원격 배포는 별도 승인 범위다. Cloud localhost와 Mac localhost는 서로 연결되어 있다고 가정하지 않는다.

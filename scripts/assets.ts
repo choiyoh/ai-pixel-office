@@ -1,12 +1,13 @@
 import fs from 'node:fs';
-import {execFileSync} from 'node:child_process';
+import {verifyVendor} from './verify-vendor.mjs';
 import {PNG} from 'pngjs';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {buildAssetCache}:typeof import('../../pixel-agents-p0/server/src/assetReload.ts')=require('../../pixel-agents-p0/server/src/assetReload.ts');
-const {decodeCharacterPng}:typeof import('../../pixel-agents-p0/core/src/assets/pngDecoder.ts')=require('../../pixel-agents-p0/core/src/assets/pngDecoder.ts');
+verifyVendor();
+const {buildAssetCache}:typeof import('../vendor/pixel-agents/server/src/assetReload.ts')=require('../vendor/pixel-agents/server/src/assetReload.ts');
+const {decodeCharacterPng}:typeof import('../vendor/pixel-agents/core/src/assets/pngDecoder.ts')=require('../vendor/pixel-agents/core/src/assets/pngDecoder.ts');
 
-if(execFileSync('git',['-C','../pixel-agents-p0','rev-parse','HEAD'],{encoding:'utf8'}).trim()!=='d1e007a9fdf3003c252d2973abe1999ae59aec33')throw new Error('Pinned upstream SHA mismatch; review engine compatibility before updating.');
+
 
 // Original raster art, authored here from pixel primitives. No downloaded character art.
 const palettes=[['#ce7352','#48303d','#ffbd87'],['#557edf','#202f51','#e9b084'],['#9171d9','#402b55','#f5c39c'],['#4baa94','#263e43','#c88e69'],['#ddad56','#59432d','#f3c299'],['#db7ca7','#733d58','#a86d53']];
@@ -47,6 +48,6 @@ const floors=[0,1].map(pattern=>Array.from({length:16},(_,y)=>Array.from({length
  const value=pattern===0?(y===0?143:157+((x*7+y*3)%7)):(y%8===0?166:181+((x*3+y)%5));
  return '#'+value.toString(16).repeat(3);
 })));
-const assets=await buildAssetCache('../pixel-agents-p0/dist',[]);
+const assets=await buildAssetCache('vendor/pixel-agents/webview-ui/public',[]);
 fs.writeFileSync('public/engine-assets.json',JSON.stringify({characters,floors,walls:assets.wallTiles,furniture:assets.furniture?{catalog:assets.furniture.catalog,sprites:Object.fromEntries(assets.furniture.sprites)}:null}));
 console.log('Six original 112×96 character sheets and pinned upstream furniture data generated.');

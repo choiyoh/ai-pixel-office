@@ -1,7 +1,7 @@
 import {chromium,expect} from '@playwright/test';
 import fs from 'node:fs';
 fs.mkdirSync('artifacts',{recursive:true});
-const browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true});
+const browser=await chromium.launch({...(process.env.ORBIT_BROWSER_EXECUTABLE?{executablePath:process.env.ORBIT_BROWSER_EXECUTABLE}:{}),headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1100},deviceScaleFactor:1});
 const errors=[],network=[];
 page.on('pageerror',e=>errors.push(e.message));

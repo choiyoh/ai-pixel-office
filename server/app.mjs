@@ -1,9 +1,68 @@
 import Fastify from 'fastify';
 import staticFiles from '@fastify/static';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import {fileURLToPath} from 'node:url';
-const app=Fastify({logger:false});
-app.get('/api/health',()=>({status:'ok',mode:'mock-only',providersConnected:0}));
-await app.register(staticFiles,{root:fileURLToPath(new URL('../dist/',import.meta.url))});
-await app.listen({host:'127.0.0.1',port:Number(process.env.PORT??4173)});
-console.log('Orbit Works standalone ready (loopback, mock only).');
-for(const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{void app.close();});
+import {randomBytes,timingSafeEqual} from 'node:crypto';
+import {makeReceiver} from './receiver.mjs';
+
+export async function createApp({mode='mock',source='live',stateDir,environment=process.platform==='darwin'?'mac-local':'linux-cloud-dev'}={}){
+ if(!['mock','claude-local'].includes(mode))throw Error('Unsupported ORBIT_MODE');
+ const app=Fastify({logger:false,bodyLimit:65536});
+ const receiver=mode==='claude-local'?makeReceiver({source}):null;
+ const cookieSecret=randomBytes(32).toString('hex');
+ let registry=null;
+ app.addHook('onRequest',async(request,reply)=>{
+  const host=request.headers.host;
+  if(!host||!/^((127\.0\.0\.1)|(localhost))(:\d+)?$/.test(host))return reply.code(403).send({error:'loopback-host-required'});
+  if(request.headers.origin&&request.headers.origin!==`http://${host}`)return reply.code(403).send({error:'same-origin-required'});
+  if(request.method==='GET'&&(request.url==='/'||request.url.startsWith('/?'))){reply.header('set-cookie',`orbit_session=${cookieSecret}; HttpOnly; SameSite=Strict; Path=/`);}
+  reply.header('x-content-type-options','nosniff');reply.header('referrer-policy','no-referrer');
+  if(request.url.startsWith('/api/'))reply.header('cache-control','no-store');
+  if(['/api/connection','/api/events'].includes(request.routeOptions.url)){
+   const candidate=(request.headers.cookie??'').split(';').map(s=>s.trim()).find(s=>s.startsWith('orbit_session='))?.slice(14)??'';
+   const a=Buffer.from(candidate),b=Buffer.from(cookieSecret);
+   if(a.length!==b.length||!timingSafeEqual(a,b))return reply.code(401).send({error:'local-session-required'});
+  }
+ });
+ app.get('/api/health',()=>({status:'ok',mode:mode==='mock'?'mock-only':'claude-local-prepared',providersConnected:receiver?.snapshot().sessions.length?1:0,realMacVerified:false}));
+ app.get('/api/connection',()=>{
+  const snapshot=receiver?.snapshot();
+  return {mode,environment,platform:process.platform,arch:process.arch,node:process.versions.node,connection:receiver?(snapshot.lastEventAt?'events-received':'awaiting-events'):'mock-only',source:snapshot?.source??'mock',lastEventAt:snapshot?.lastEventAt??null,realMacVerified:false};
+ });
+ app.get('/api/events',()=>receiver?.snapshot()??{source:'mock',validation:'not-live',lastEventAt:null,sequence:0,sessions:[]});
+ app.post('/api/hooks/:providerId',async(request,reply)=>{
+  if(!receiver)return reply.code(409).send({error:'receiver-disabled-in-mock-mode'});
+  if(!receiver.authorized(request.headers.authorization))return reply.code(401).send({error:'unauthorized'});
+  try{return await receiver.receive(request.params.providerId,request.body);}catch(error){return reply.code(error.statusCode??422).send({error:error.statusCode===404?'unsupported-provider':'event-not-accepted'});}
+ });
+ await app.register(staticFiles,{root:fileURLToPath(new URL('../dist/',import.meta.url)),index:['index.html']});
+ app.addHook('onClose',async()=>{
+  await receiver?.close();
+  if(registry){try{const current=JSON.parse(fs.readFileSync(registry,'utf8'));if(current.token===receiver.token)fs.unlinkSync(registry);}catch{ /* no unrelated file removal */ }}
+ });
+ return {app,async listen(port){
+  await app.listen({host:'127.0.0.1',port});
+  if(receiver){
+   try{
+    const stateRoot=stateDir??path.join(os.homedir(),'.orbit-works');
+    fs.mkdirSync(stateRoot,{recursive:true,mode:0o700});
+    const rootStat=fs.lstatSync(stateRoot);
+    if(!rootStat.isDirectory()||rootStat.isSymbolicLink()||(rootStat.mode&0o077)!==0||(typeof process.getuid==='function'&&rootStat.uid!==process.getuid()))throw Error('Unsafe state directory');
+    const directory=path.join(stateRoot,'runtime');
+    fs.mkdirSync(directory,{recursive:true,mode:0o700});
+    const stat=fs.lstatSync(directory);
+    if(!stat.isDirectory()||stat.isSymbolicLink()||(stat.mode&0o077)!==0||(typeof process.getuid==='function'&&stat.uid!==process.getuid()))throw Error('Unsafe runtime directory');
+    registry=path.join(directory,'receiver.json');
+    fs.writeFileSync(registry,JSON.stringify({port:app.server.address().port,token:receiver.token,pid:process.pid}),{flag:'wx',mode:0o600});
+   }catch(error){registry=null;await app.close();throw error;}
+  }
+ }};
+}
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+ const instance=await createApp({mode:process.env.ORBIT_MODE??'mock',stateDir:process.env.ORBIT_STATE_DIR});
+ await instance.listen(Number(process.env.PORT??4173));
+ console.log('Orbit Works ready on loopback. Real Mac validation remains pending.');
+ for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{void instance.app.close();});
+}

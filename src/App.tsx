@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
-import type {OfficeState} from '../../pixel-agents-p0/webview-ui/src/office/engine/officeState';
+import type {OfficeState} from '../vendor/pixel-agents/webview-ui/src/office/engine/officeState';
 import {OfficeCanvas} from './Canvas';
+import {ConnectionPanel} from './ConnectionPanel';
 import {createOffice,syncAgent} from './engine';
 import {layoutKey,seatsKey} from './layout';
 import {officeTimezone,roster,statuses,statusLabels,reduceAgents,todayCompleted,type Agent,type OfficeEvent,type Status} from './model';
@@ -51,7 +52,8 @@ export function App(){
  return <div className="app-shell">
   <aside className="rail"><div className="brand-mark">o<span>✦</span></div><div className="rail-icon active" title="Office">▦</div><a className="rail-icon" href="#team" aria-label="팀 목록">♟</a><a className="rail-icon" href="#timeline" aria-label="이벤트">≋</a><div className="rail-bottom">OW<br/><span>01</span></div></aside>
   <div className="workspace">
-   <header><div><div className="eyebrow">A SMALL OFFICE. BIG IDEAS.</div><h1>Orbit Works <span>AI 개발회사</span></h1></div><div className="header-right"><span className="mock-badge"><i/> MOCK SANDBOX</span><span className="date">실제 연결 0개</span></div></header>
+   <header><div><div className="eyebrow">A SMALL OFFICE. BIG IDEAS.</div><h1>Orbit Works <span>AI 개발회사</span></h1></div><div className="header-right"><span className="mock-badge"><i/> MOCK SANDBOX</span><span className="date">캔버스 Mock · 연결 상태 별도 표시</span></div></header>
+   <ConnectionPanel/>
    <section className="overview"><div className="intro"><span className="live-dot"/> OFFICE OVERVIEW <small>여섯 동료가 만드는 작은 우주</small></div><div className="metric"><b>{active.toString().padStart(2,'0')}</b><span>작업 중</span><i className="mint"/></div><div className="metric"><b>{waiting.toString().padStart(2,'0')}</b><span>승인 대기</span><i className="amber"/></div><div className="metric"><b>{todayCompleted(filteredEvents,now).toString().padStart(2,'0')}</b><span>오늘 완료 · Mock</span><i className="lilac"/></div></section>
    <main><section className="office-panel">
     <div className="panel-toolbar"><div><span className="eyebrow">THE FLOOR</span><h2>우리의 작업 공간 <span>1F</span></h2></div><div className="filters"><label>프로젝트<select aria-label="프로젝트 필터" value={project} onChange={e=>setProject(e.target.value)}><option value="all">모든 프로젝트</option>{[...new Set(roster.map(a=>a.project))].map(p=><option key={p}>{p}</option>)}</select></label><label>에이전트<select aria-label="에이전트 필터" value={agentFilter} onChange={e=>setAgentFilter(e.target.value)}><option value="all">모든 에이전트</option>{roster.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label></div></div>

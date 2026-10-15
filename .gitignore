@@ -3,3 +3,4 @@ dist/
 public/engine-assets.json
 artifacts/
 *.tsbuildinfo
+.cache/

@@ -6,10 +6,10 @@ import {PNG} from 'pngjs';
 import {roster,reduceAgents,todayCompleted,type OfficeEvent} from '../src/model';
 const require=createRequire(import.meta.url);
 const {createLayout,loadLayout,layoutKey}:typeof import('../src/layout')=require('../src/layout');
-const {OfficeState}:typeof import('../../pixel-agents-p0/webview-ui/src/office/engine/officeState')=require('../../pixel-agents-p0/webview-ui/src/office/engine/officeState');
-const {buildDynamicCatalog,getCatalogEntry}:typeof import('../../pixel-agents-p0/webview-ui/src/office/layout/furnitureCatalog')=require('../../pixel-agents-p0/webview-ui/src/office/layout/furnitureCatalog');
-const {findPath}:typeof import('../../pixel-agents-p0/webview-ui/src/office/layout/tileMap')=require('../../pixel-agents-p0/webview-ui/src/office/layout/tileMap');
-const {setCharacterTemplates}:typeof import('../../pixel-agents-p0/webview-ui/src/office/sprites/spriteData')=require('../../pixel-agents-p0/webview-ui/src/office/sprites/spriteData');
+const {OfficeState}:typeof import('../vendor/pixel-agents/webview-ui/src/office/engine/officeState')=require('../vendor/pixel-agents/webview-ui/src/office/engine/officeState');
+const {buildDynamicCatalog,getCatalogEntry}:typeof import('../vendor/pixel-agents/webview-ui/src/office/layout/furnitureCatalog')=require('../vendor/pixel-agents/webview-ui/src/office/layout/furnitureCatalog');
+const {findPath}:typeof import('../vendor/pixel-agents/webview-ui/src/office/layout/tileMap')=require('../vendor/pixel-agents/webview-ui/src/office/layout/tileMap');
+const {setCharacterTemplates}:typeof import('../vendor/pixel-agents/webview-ui/src/office/sprites/spriteData')=require('../vendor/pixel-agents/webview-ui/src/office/sprites/spriteData');
 const data=JSON.parse(fs.readFileSync('public/engine-assets.json','utf8'));
 buildDynamicCatalog(data.furniture);setCharacterTemplates(data.characters);
 

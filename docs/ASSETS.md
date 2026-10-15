@@ -26,4 +26,4 @@
 - 가구·벽의 렌더 데이터를 `public/engine-assets.json`으로 생성하며 배포 bundle에는 원본 코드를 포함한다. 원본 저작권 고지를 `public/THIRD-PARTY-NOTICES.txt`에 포함했다.
 - 원본 문서의 Donarg 유료 Office Interior Tileset은 참고 링크일 뿐 이 앱에서 신규 다운로드하지 않았다. 향후 외부 팩을 추가하면 해당 팩의 개별 권리를 다시 확인해야 한다.
 
-`public/engine-assets.json`과 `dist/`는 생성물로 git에서 제외한다. 소스·원본 고정 SHA·lockfile·스프라이트와 생성 스크립트로 재생성한다. 현재 앱은 인접한 원본 체크아웃의 엔진을 직접 import한다. 프로젝트 폴더 하나만 복사해서 독립적으로 빌드할 수 있다고 주장하지 않는다.
+`public/engine-assets.json`과 `dist/`는 생성물로 git에서 제외한다. 소스·원본 고정 SHA·lockfile·스프라이트와 생성 스크립트로 재생성한다. P2-A부터 원본 체크아웃을 고정 SHA의 vendor/pixel-agents로 포함했다. 외부 형제 checkout 없이 이 저장소와 lockfile로 설치·빌드한다. vendor/upstream-lock.json으로 원본 파일 hash를 검증한다.

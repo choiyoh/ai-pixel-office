@@ -1,9 +1,9 @@
-import {OfficeState} from '../../pixel-agents-p0/webview-ui/src/office/engine/officeState';
-import {setCharacterTemplates} from '../../pixel-agents-p0/webview-ui/src/office/sprites/spriteData';
-import {buildDynamicCatalog} from '../../pixel-agents-p0/webview-ui/src/office/layout/furnitureCatalog';
-import {setFloorSprites} from '../../pixel-agents-p0/webview-ui/src/office/floorTiles';
-import {setWallSprites} from '../../pixel-agents-p0/webview-ui/src/office/wallTiles';
-import {setProviderCapabilities} from '../../pixel-agents-p0/webview-ui/src/office/toolUtils';
+import {OfficeState} from '../vendor/pixel-agents/webview-ui/src/office/engine/officeState';
+import {setCharacterTemplates} from '../vendor/pixel-agents/webview-ui/src/office/sprites/spriteData';
+import {buildDynamicCatalog} from '../vendor/pixel-agents/webview-ui/src/office/layout/furnitureCatalog';
+import {setFloorSprites} from '../vendor/pixel-agents/webview-ui/src/office/floorTiles';
+import {setWallSprites} from '../vendor/pixel-agents/webview-ui/src/office/wallTiles';
+import {setProviderCapabilities} from '../vendor/pixel-agents/webview-ui/src/office/toolUtils';
 import {loadLayout,seatsKey} from './layout';
 import type {Agent} from './model';
 

@@ -1,4 +1,4 @@
-import {TileType,type OfficeLayout} from '../../pixel-agents-p0/webview-ui/src/office/types';
+import {TileType,type OfficeLayout} from '../vendor/pixel-agents/webview-ui/src/office/types';
 export const zones=[
   {label:'개발팀',caption:'ENGINEERING',col:1,row:1,w:12,h:10,color:'#e0ac73'},
   {label:'분석팀',caption:'ANALYTICS',col:14,row:1,w:11,h:10,color:'#a7a3d9'},

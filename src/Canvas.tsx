@@ -1,7 +1,7 @@
 import {useEffect,useRef} from 'react';
-import type {OfficeState} from '../../pixel-agents-p0/webview-ui/src/office/engine/officeState';
-import {startGameLoop} from '../../pixel-agents-p0/webview-ui/src/office/engine/gameLoop';
-import {renderFrame} from '../../pixel-agents-p0/webview-ui/src/office/engine/renderer';
+import type {OfficeState} from '../vendor/pixel-agents/webview-ui/src/office/engine/officeState';
+import {startGameLoop} from '../vendor/pixel-agents/webview-ui/src/office/engine/gameLoop';
+import {renderFrame} from '../vendor/pixel-agents/webview-ui/src/office/engine/renderer';
 import type {Agent} from './model';
 import {zones} from './layout';
 
