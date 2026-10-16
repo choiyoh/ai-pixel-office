@@ -10,6 +10,7 @@ import {windowsAclScript} from '../platform/private-files.mjs';
 import {safeCiFailure} from '../scripts/ci-diagnostics.mjs';
 import {summarizeUpstream} from '../scripts/upstream-diagnostics.mjs';
 import {applyWindowsTestFixtures,createUpstreamWorkspace} from '../scripts/upstream-workspace.mjs';
+import {browserFailure} from '../scripts/browser-diagnostics.mjs';
 
 test('simulated OS paths and WSL context remain independent',()=>{
  assert.equal(stateRoot({platform:'win32',home:'C:\\Users\\테스트',env:{LOCALAPPDATA:'C:\\Users\\테스트\\AppData\\Local'}}),'C:\\Users\\테스트\\AppData\\Local\\Orbit Works');
@@ -78,6 +79,12 @@ test('CI annotations classify failures without raw names, paths or assertion str
 test('upstream diagnostics never publish runtime assertion strings or full paths',()=>{
  const summary=summarizeUpstream({numTotalTests:1,numPassedTests:0,numFailedTests:1,testResults:[{name:'C:\\PRIVATE-FIXTURE\\example.test.ts',assertionResults:[{status:'failed',title:'PRIVATE-FIXTURE',failureMessages:['AssertionError: expected false to be true; PRIVATE-FIXTURE'] }]}]},'server');
  assert.equal(summary.failures[0].file,'example.test.ts');assert.equal(summary.failures[0].actualBoolean,false);assert.ok(!JSON.stringify(summary).includes('PRIVATE-FIXTURE'));
+ const base=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-untrusted-report-'));
+ try{
+  const file=path.join(base,'configPersistence.test.ts');fs.writeFileSync(file,"test('PRIVATE-FIXTURE',()=>{});");
+  const result=summarizeUpstream({testResults:[{name:file,assertionResults:[{status:'failed',title:'PRIVATE-FIXTURE'}]}]},'server');
+  assert.ok(!JSON.stringify(result).includes('PRIVATE-FIXTURE'));
+ }finally{fs.rmSync(base,{recursive:true,force:true});}
 });
 test('Windows upstream fixtures are isolated and drift is rejected before any writes',()=>{
  const base=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-upstream-overlay-'));
@@ -91,4 +98,9 @@ test('Windows upstream fixtures are isolated and drift is rejected before any wr
   fs.writeFileSync(fixture,original);assert.equal(applyWindowsTestFixtures(workspace.directory).length,5);
   assert.notEqual(fs.readFileSync(fixture,'utf8'),original);
  }finally{fs.rmSync(base,{recursive:true,force:true});}
+});
+test('browser failure diagnostics discard DOM strings, paths and raw error messages',()=>{
+ const failure=browserFailure('mobile',{name:'Error',message:'PRIVATE-FIXTURE',matcherResult:{name:'toBe',actual:false,expected:true},stack:'PRIVATE-FIXTURE'});
+ assert.equal(failure.stage,'mobile');assert.equal(failure.actual,false);assert.equal(failure.expected,true);assert.ok(!JSON.stringify(failure).includes('PRIVATE-FIXTURE'));
+ const unknown=browserFailure('PRIVATE-FIXTURE',{matcherResult:{name:'PRIVATE-FIXTURE',actual:'PRIVATE-FIXTURE'}});assert.equal(unknown.stage,'unknown');assert.equal(unknown.actual,null);
 });

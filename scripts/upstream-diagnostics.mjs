@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {root} from './verify-vendor.mjs';
 
 export function summarizeUpstream(report,suite){
  const failures=[];
  for(const result of report.testResults??[]){
   const basename=path.win32.basename(path.posix.basename(result.name??''));
   const file=/^[A-Za-z0-9_.-]+\.test\.ts$/.test(basename)?basename:'upstream-suite';
-  let source='';try{source=fs.readFileSync(result.name,'utf8');}catch{ /* No path output. */ }
+  const folder=suite==='server'?'server/__tests__':suite==='webview-ui'?'webview-ui/test':null;
+  let source='';try{if(folder&&file!=='upstream-suite')source=fs.readFileSync(path.join(root,'vendor/pixel-agents',folder,file),'utf8');}catch{ /* Never read paths supplied by test output. */ }
   for(const [index,test] of (result.assertionResults??[]).entries())if(test.status==='failed'){
    // Only literal titles already in the pinned public source may be published.
    const title=String(test.title??'');
