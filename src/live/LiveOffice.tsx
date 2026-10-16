@@ -25,7 +25,7 @@ export function LiveOffice({active,onMode}:{active:boolean;onMode:(mode:'mock'|'
   if(scope)sceneScope.current=scope;
   const actors=snapshot?.actors??[],ids=new Set(actors.map(a=>a.actorId));
   for(const [key,a] of previous.current)if(!ids.has(key)){
-   office.removeAgent(a.renderId);retiring.current.set(a.renderId,{id:a.renderId,name:a.name,status:'neutral',retiring:true});signatures.current.delete(key);
+   office.setAgentActive(a.renderId,false);office.setAgentTool(a.renderId,null);office.removeAgent(a.renderId);retiring.current.set(a.renderId,{id:a.renderId,name:a.name,status:'neutral',retiring:true});signatures.current.delete(key);
   }
   for(const a of actors){
    const signature=[a.lastEventAt,a.status,a.kind,freshness(a,now,offline)].join(':');

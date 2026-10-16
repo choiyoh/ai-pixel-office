@@ -71,8 +71,19 @@ try{
  const html=await page.locator('body').innerText();for(const value of [secret,native,token])expect(html.includes(value)).toBe(false);
  expect(fs.readFileSync(path.join(stateDir,'live/claude-fixture.json'),'utf8').includes(secret)).toBe(false);
  await page.screenshot({path:'artifacts/live-office-synthetic.png',fullPage:true});
- stage='live-end';await post(native,'SessionEnd');await expect(page.getByTestId('live-count')).toHaveText('6');await expect(page.getByTestId('live-agent-1')).toHaveCount(0);
- await expect.poll(async()=>(await actors()).some(a=>a.id===1&&a.effect==='despawn'),{timeout:3000,intervals:[50,50,100]}).toBe(true);
+ stage='live-end';
+ // Observe actual rendered frames before posting: the upstream effect lasts
+ // 300ms, shorter than multiple CI browser round trips. Keep the engine speed.
+ await page.evaluate(()=>{
+  globalThis.orbitRetirementSeen=false;
+  const canvas=document.querySelector('canvas'),observer=new MutationObserver(()=>{
+   const characters=JSON.parse(canvas.getAttribute('data-actors')??'[]');
+   if(characters.some(a=>a.id===1&&a.effect==='despawn'&&!a.active&&a.tool===null)){globalThis.orbitRetirementSeen=true;observer.disconnect();}
+  });
+  observer.observe(canvas,{attributes:true,attributeFilter:['data-actors']});setTimeout(()=>observer.disconnect(),10000);
+ });
+ await post(native,'SessionEnd');await expect(page.getByTestId('live-count')).toHaveText('6');await expect(page.getByTestId('live-agent-1')).toHaveCount(0);
+ await expect.poll(()=>page.evaluate(()=>globalThis.orbitRetirementSeen)).toBe(true);
  await expect.poll(async()=>(await actors()).some(a=>a.id===1),{timeout:5000}).toBe(false);
  await post(native,'PreToolUse',{tool_name:'Write'});await post(native,'SessionStart');await expect(page.getByTestId('live-count')).toHaveText('6');
  stage='live-restart';const before=await actors();await instance.app.close();await expect(page.getByTestId('live-connection')).toContainText('서버 연결 끊김',{timeout:10000});
