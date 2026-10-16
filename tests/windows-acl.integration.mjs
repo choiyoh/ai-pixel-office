@@ -5,12 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {windowsAclScript,assertPrivate,ensurePrivateDirectory,writePrivateExclusive} from '../platform/private-files.mjs';
-import {powershellInvocation,powerShellDiagnostic,psQuote,runPowerShell,windowsPowerShellEnvironment} from '../platform/runtime.mjs';
+import {powershellInvocation,powerShellDiagnostic,psQuote,runPowerShell} from '../platform/runtime.mjs';
 
 // Mutate test-owned temporary fixtures only; never inspect user settings.
 function execute(script,engine='desktop'){
  const invocation=powershellInvocation(script);
- const result=spawnSync(engine==='core'?'pwsh.exe':invocation.command,invocation.args,{env:engine==='core'?process.env:windowsPowerShellEnvironment(),shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
+ const result=spawnSync(engine==='core'?'pwsh.exe':invocation.command,invocation.args,{env:process.env,shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
  if(result.error||result.status!==0){
   const diagnostic=powerShellDiagnostic(result);
   // Job summaries are visible without exposing raw PowerShell stderr/paths.
@@ -38,10 +38,12 @@ for(const engine of ['desktop','core'])test(`Windows ${engine==='desktop'?'Power
    const legacy=spawnSync(invocation.command,invocation.args,{env:process.env,shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
    t.diagnostic('ORBIT_CI_PROBE:'+JSON.stringify({kind:'ps-module-environment',legacyFailed:legacy.status!==0,legacy:powerShellDiagnostic(legacy)}));
   }
-  const output=execute(`$before=Get-Acl -LiteralPath ${psQuote(directory)}; `+windowsAclScript(directory,{directory:true,create:true})+`
-   $after=Get-Acl -LiteralPath ${psQuote(directory)};
-   [Console]::Out.Write((ConvertTo-Json -Compress -InputObject @{ownerPreserved=($before.Owner -eq $after.Owner);groupPreserved=($before.Group -eq $after.Group);protected=$after.AreAccessRulesProtected;major=$PSVersionTable.PSVersion.Major}));`,engine);
-  const checked=JSON.parse(output);assert.equal(checked.ownerPreserved,true);assert.equal(checked.groupPreserved,true);assert.equal(checked.protected,true);assert.equal(checked.major,engine==='desktop'?5:7);
+  const output=execute(`$before=[Security.AccessControl.DirectorySecurity]::new(${psQuote(directory)},[Security.AccessControl.AccessControlSections]'Access, Owner, Group'); `+windowsAclScript(directory,{directory:true,create:true})+`
+   $after=[Security.AccessControl.DirectorySecurity]::new(${psQuote(directory)},$sections);
+   $ownerPreserved=$before.GetOwner([Security.Principal.SecurityIdentifier]) -eq $after.GetOwner([Security.Principal.SecurityIdentifier]);
+   $groupPreserved=$before.GetGroup([Security.Principal.SecurityIdentifier]) -eq $after.GetGroup([Security.Principal.SecurityIdentifier]);
+   [Console]::Out.Write([String]::Join('|',[string[]]@($ownerPreserved,$groupPreserved,$after.AreAccessRulesProtected,$PSVersionTable.PSVersion.Major)));`,engine);
+  assert.deepEqual(output.split('|'),['True','True','True',engine==='desktop'?'5':'7']);
   writePrivateExclusive(file,{fixture:true});execute(windowsAclScript(file),engine);assertPrivate(file);
   assert.throws(()=>writePrivateExclusive(file,{replaced:true}),{code:'EEXIST'});assert.equal(fs.readFileSync(file,'utf8'),'{"fixture":true}');
  }finally{fs.rmSync(base,{recursive:true,force:true});}
@@ -49,10 +51,10 @@ for(const engine of ['desktop','core'])test(`Windows ${engine==='desktop'?'Power
 test('Windows rejects existing public ACL without changing its descriptor',{skip:process.platform!=='win32'},()=>{
  const base=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-acl-existing-')),directory=path.join(base,'existing');fs.mkdirSync(directory);
  try{
-  execute(`$ErrorActionPreference='Stop'; $p=${psQuote(directory)}; $item=Get-Item -LiteralPath $p; $acl=Get-Acl -LiteralPath $p;
+  execute(`$ErrorActionPreference='Stop'; $p=${psQuote(directory)}; $item=[IO.DirectoryInfo]::new($p); $acl=[Security.AccessControl.DirectorySecurity]::new($p,[Security.AccessControl.AccessControlSections]'Access, Owner, Group');
    $sid=[Security.Principal.SecurityIdentifier]::new('S-1-1-0');
    $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,[Security.AccessControl.FileSystemRights]::ReadAndExecute,[Security.AccessControl.AccessControlType]::Allow)); $item.SetAccessControl($acl);`);
-  const read=()=>execute(`$acl=Get-Acl -LiteralPath ${psQuote(directory)}; [Console]::Out.Write($acl.Sddl);`);
+  const read=()=>execute(`$sections=[Security.AccessControl.AccessControlSections]'Access, Owner, Group'; $acl=[Security.AccessControl.DirectorySecurity]::new(${psQuote(directory)},$sections); [Console]::Out.Write($acl.GetSecurityDescriptorSddlForm($sections));`);
   const before=read();assert.throws(()=>ensurePrivateDirectory(directory),error=>error.diagnostic?.reason==='untrusted-allow');assert.ok(read()===before,'Existing ACL must be preserved');
  }finally{fs.rmSync(base,{recursive:true,force:true});}
 });

@@ -5,11 +5,13 @@ export function windowsAclScript(file,{directory=false,create=false}={}){
  // Limit access to this user, SYSTEM and local Administrators. New files only
  // are secured; existing user paths are verified, never silently rewritten.
  return `$ErrorActionPreference='Stop'; $stage='path'; $reason='operation'; try {
- $p=${psQuote(file)}; $item=Get-Item -Force -LiteralPath $p;
+ $p=${psQuote(file)}; $item=[IO.${directory?'DirectoryInfo':'FileInfo'}]::new($p);
+ if(-not $item.Exists){throw [IO.FileNotFoundException]::new('Orbit private path missing')};
  if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){$reason='reparse-point'; throw 'refused'};
  $stage='identity'; $me=[Security.Principal.WindowsIdentity]::GetCurrent().User;
  $allowed=@($me.Value,'S-1-5-18','S-1-5-32-544');
- $stage='read-acl'; $acl=Get-Acl -LiteralPath $p;
+ $sections=[Security.AccessControl.AccessControlSections]'Access, Owner, Group';
+ $stage='read-acl'; $acl=[Security.AccessControl.${directory?'DirectorySecurity':'FileSecurity'}]::new($p,$sections);
  $stage='owner'; $owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value;
  if($allowed -notcontains $owner){$reason='owner-not-allowed'; throw 'refused'};
  `+(create?`
@@ -26,7 +28,7 @@ export function windowsAclScript(file,{directory=false,create=false}={}){
  $stage='write-acl';
  if($PSVersionTable.PSEdition -eq 'Desktop'){$item.SetAccessControl($acl)}
  else{[IO.FileSystemAclExtensions]::SetAccessControl($item,$acl)};
- $stage='read-acl'; $acl=Get-Acl -LiteralPath $p;
+ $stage='read-acl'; $acl=[Security.AccessControl.${directory?'DirectorySecurity':'FileSecurity'}]::new($p,$sections);
  `:'')+`
  $stage='verify-acl'; $owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value;
  if($allowed -notcontains $owner){$reason='owner-not-allowed'; throw 'refused'};
@@ -38,9 +40,11 @@ export function windowsAclScript(file,{directory=false,create=false}={}){
  } catch {
  if($reason -eq 'operation' -and $_.FullyQualifiedErrorId -match 'AutoLoad|Module'){$reason='module-resolution'};
  $failure=$_.Exception; while($null -ne $failure.InnerException){$failure=$failure.InnerException};
- $native=$null; if($failure -is [ComponentModel.Win32Exception]){$native=$failure.NativeErrorCode};
- $detail=@{stage=$stage;reason=$reason;exception=$failure.GetType().FullName;hresult=$failure.HResult;nativeCode=$native;psMajor=$PSVersionTable.PSVersion.Major;psMinor=$PSVersionTable.PSVersion.Minor;edition=$PSVersionTable.PSEdition};
- [Console]::Error.WriteLine('ORBIT_ACL_FAILURE:'+(ConvertTo-Json -Compress -InputObject $detail)); exit 1
+ $native='null'; if($failure -is [ComponentModel.Win32Exception]){$native=$failure.NativeErrorCode.ToString([Globalization.CultureInfo]::InvariantCulture)};
+ $kind=$failure.GetType().FullName; if($kind -notmatch '^[A-Za-z0-9_.+]+$'){$kind='unclassified'};
+ # Fixed enum/type/numeric fields only: no cmdlet autoload or raw messages.
+ $detail='{"stage":"'+$stage+'","reason":"'+$reason+'","exception":"'+$kind+'","hresult":'+$failure.HResult.ToString([Globalization.CultureInfo]::InvariantCulture)+',"nativeCode":'+$native+',"psMajor":'+$PSVersionTable.PSVersion.Major.ToString([Globalization.CultureInfo]::InvariantCulture)+',"psMinor":'+$PSVersionTable.PSVersion.Minor.ToString([Globalization.CultureInfo]::InvariantCulture)+',"edition":"'+$PSVersionTable.PSEdition+'"}';
+ [Console]::Error.WriteLine('ORBIT_ACL_FAILURE:'+$detail); exit 1
  }`;
 }
 export function assertPrivate(file,{directory=false}={}){

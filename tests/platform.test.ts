@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fork} from 'node:child_process';
-import {runtimeInfo,stateRoot,claudeSettings,npmInvocation,stopOwnedChild,powerShellDiagnostic,windowsPowerShellEnvironment} from '../platform/runtime.mjs';
+import {runtimeInfo,stateRoot,claudeSettings,npmInvocation,stopOwnedChild,powerShellDiagnostic} from '../platform/runtime.mjs';
 import {hookLaunch,cliInvocation,isOrbitHookCommand} from '../platform/launch.mjs';
 import {windowsAclScript} from '../platform/private-files.mjs';
 import {safeCiFailure} from '../scripts/ci-diagnostics.mjs';
@@ -72,9 +72,4 @@ test('CI annotations classify failures without raw names, paths or assertion str
  assert.equal(failure.case,'synthetic-hooks');assert.equal(failure.expected,false);assert.equal(failure.actual,null);assert.ok(!JSON.stringify(failure).includes(privateText));
  const diagnostic=safeCiFailure({name:'PowerShell 5.1',details:{error:{message:'Windows ACL fixture failed: '+JSON.stringify({exitCode:1,stage:'write-acl',exception:'System.UnauthorizedAccessException',message:privateText})}}});
  assert.ok(diagnostic.permission);assert.equal(diagnostic.permission.stage,'write-acl');assert.ok(!JSON.stringify(diagnostic).includes(privateText));
-});
-test('Windows PowerShell child ignores inherited Core module paths without changing the parent',()=>{
- const original={PSModulePath:'CORE-MODULE-FIXTURE',pSmOdUlEaNaLySiScAcHePaTh:'CORE-CACHE-FIXTURE',PATH:'UNCHANGED-PATH',ORBIT_STATE_DIR:'UNCHANGED-STATE'};
- const child=windowsPowerShellEnvironment(original);
- assert.equal(child.PSModulePath,undefined);assert.equal(child.pSmOdUlEaNaLySiScAcHePaTh,undefined);assert.equal(child.PATH,original.PATH);assert.equal(child.ORBIT_STATE_DIR,original.ORBIT_STATE_DIR);assert.equal(original.PSModulePath,'CORE-MODULE-FIXTURE');
 });

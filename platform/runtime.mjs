@@ -38,11 +38,6 @@ export function powershellExecutable(env=process.env){
  return path.win32.join(env.SystemRoot??env.SYSTEMROOT??'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
 }
 export const psQuote=value=>"'"+value.replaceAll("'","''")+"'";
-export function windowsPowerShellEnvironment(env=process.env){
- // A pwsh7 parent can export Core module paths/cache settings into a 5.1 child.
- // Let Windows PowerShell compute its own defaults; never change the parent.
- return Object.fromEntries(Object.entries(env).filter(([key])=>!['psmodulepath','psmoduleanalysiscachepath'].includes(key.toLowerCase())));
-}
 export function powershellInvocation(script,env=process.env){return {command:powershellExecutable(env),args:['-NoLogo','-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],shell:false};}
 // Do not attach raw child output, command arguments or paths to errors.
 export function powerShellDiagnostic(result){
@@ -60,7 +55,7 @@ export function powerShellDiagnostic(result){
 }
 export function runPowerShell(script,{env=process.env,...options}={}){
  const invocation=powershellInvocation(script,env);
- const result=spawnSync(invocation.command,invocation.args,{...options,env:windowsPowerShellEnvironment(env),shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
+ const result=spawnSync(invocation.command,invocation.args,{...options,env,shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
  if(result.error||result.status!==0){
   const diagnostic=powerShellDiagnostic(result);
   throw Object.assign(Error(`Windows permission/launcher operation failed: ${JSON.stringify(diagnostic)}; no fallback to insecure permissions.`),{code:'ORBIT_POWERSHELL_FAILED',diagnostic});
