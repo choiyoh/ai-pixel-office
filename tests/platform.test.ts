@@ -7,6 +7,7 @@ import {fork} from 'node:child_process';
 import {runtimeInfo,stateRoot,claudeSettings,npmInvocation,stopOwnedChild,powerShellDiagnostic} from '../platform/runtime.mjs';
 import {hookLaunch,cliInvocation,isOrbitHookCommand} from '../platform/launch.mjs';
 import {windowsAclScript} from '../platform/private-files.mjs';
+import {safeCiFailure} from '../scripts/ci-diagnostics.mjs';
 
 test('simulated OS paths and WSL context remain independent',()=>{
  assert.equal(stateRoot({platform:'win32',home:'C:\\Users\\테스트',env:{LOCALAPPDATA:'C:\\Users\\테스트\\AppData\\Local'}}),'C:\\Users\\테스트\\AppData\\Local\\Orbit Works');
@@ -64,4 +65,11 @@ test('owned process shutdown uses IPC on the actual host OS',async()=>{
  const child=fork(file,[],{stdio:['ignore','ignore','ignore','ipc']});
  try{await new Promise(resolve=>child.once('message',resolve));await stopOwnedChild(child);assert.equal(child.exitCode,0);}
  finally{if(child.exitCode===null)child.kill();fs.rmSync(path.dirname(file),{recursive:true,force:true});}
+});
+test('CI annotations classify failures without raw names, paths or assertion strings',()=>{
+ const privateText='PRIVATE-FIXTURE-DO-NOT-PRINT';
+ const failure=safeCiFailure({name:'synthetic authenticated hooks '+privateText,details:{error:{cause:{code:'ERR_ASSERTION',actual:privateText,expected:false,message:privateText,stack:privateText}}}});
+ assert.equal(failure.case,'synthetic-hooks');assert.equal(failure.expected,false);assert.equal(failure.actual,null);assert.ok(!JSON.stringify(failure).includes(privateText));
+ const diagnostic=safeCiFailure({name:'PowerShell 5.1',details:{error:{message:'Windows ACL fixture failed: '+JSON.stringify({exitCode:1,stage:'write-acl',exception:'System.UnauthorizedAccessException',message:privateText})}}});
+ assert.ok(diagnostic.permission);assert.equal(diagnostic.permission.stage,'write-acl');assert.ok(!JSON.stringify(diagnostic).includes(privateText));
 });
