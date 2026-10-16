@@ -13,7 +13,7 @@ try{
  await page.goto(process.env.ORBIT_BASE_URL??'http://127.0.0.1:4173');
  await expect(page.getByTestId('agent-6')).toBeVisible();
  await expect(page.locator('.agent-card')).toHaveCount(6);
- await expect.poll(async()=>JSON.parse(await page.locator('canvas').getAttribute('data-actors')).length).toBe(6);
+ await expect.poll(async()=>JSON.parse((await page.locator('canvas').getAttribute('data-actors'))??'[]').length).toBe(6);
  await page.waitForTimeout(2500);
  await page.screenshot({path:'artifacts/office-desktop.png',fullPage:true});
  await page.getByTestId('agent-3').click();
@@ -22,7 +22,7 @@ try{
   await page.getByTestId(`status-${status}`).click();
   await expect(page.locator('.state-pill')).toContainText(label);
  }
- stage='offline-freeze';const offlinePosition=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-actors')).find(a=>a.id===3);
+ stage='offline-freeze';const offlinePosition=async()=>JSON.parse((await page.locator('canvas').getAttribute('data-actors'))??'[]').find(a=>a.id===3);
  await page.waitForTimeout(200);const beforeOffline=await offlinePosition();await page.waitForTimeout(350);const afterOffline=await offlinePosition();
  expect(afterOffline.state).toBe('idle');expect(afterOffline.x).toBe(beforeOffline.x);expect(afterOffline.y).toBe(beforeOffline.y);
  await page.screenshot({path:'artifacts/office-disconnected.png',fullPage:true});
@@ -38,13 +38,13 @@ try{
  stage='seat-persistence';await page.reload();await expect(page.locator('.agent-card')).toHaveCount(6);
  expect(await page.evaluate(()=>localStorage.getItem('orbit.layout.v1'))).toBe(stored.layout);
  expect(await page.evaluate(()=>localStorage.getItem('orbit.seats.v1'))).toBe(stored.seats);
- await expect.poll(async()=>JSON.parse(await page.locator('canvas').getAttribute('data-actors')).find(a=>a.id===2)?.seat).toBe('meeting-2');
+ await expect.poll(async()=>JSON.parse((await page.locator('canvas').getAttribute('data-actors'))??'[]').find(a=>a.id===2)?.seat).toBe('meeting-2');
  stage='zoom';await page.getByRole('button',{name:'확대',exact:true}).click();await expect(page.locator('.zoom-controls')).toContainText('110%');
  await page.waitForTimeout(350);
  expect(await page.locator('canvas').evaluate(c=>c.getContext('2d').getImageData(c.width/2,c.height/2,1,1).data[3])).toBeGreaterThan(0);
  await page.getByRole('button',{name:'축소',exact:true}).click();await expect(page.locator('.zoom-controls')).toContainText('100%');
  stage='remove-respawn';await page.getByRole('button',{name:'Mock 에이전트 제거'}).click();await expect(page.locator('.agent-card')).toHaveCount(5);
- await expect.poll(async()=>JSON.parse(await page.locator('canvas').getAttribute('data-actors')).length).toBe(5);
+ await expect.poll(async()=>JSON.parse((await page.locator('canvas').getAttribute('data-actors'))??'[]').length).toBe(5);
  await page.getByRole('button',{name:'↺ 초기화',exact:true}).click();await expect(page.locator('.agent-card')).toHaveCount(6);
  stage='scenario';await page.getByRole('button',{name:'▶ 시나리오 재생'}).click();
  await expect(page.locator('.event-row').filter({hasText:'Mock 테스트 실패'})).toBeVisible({timeout:20000});
