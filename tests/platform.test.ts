@@ -9,6 +9,7 @@ import {hookLaunch,cliInvocation,isOrbitHookCommand} from '../platform/launch.mj
 import {windowsAclScript} from '../platform/private-files.mjs';
 import {safeCiFailure} from '../scripts/ci-diagnostics.mjs';
 import {summarizeUpstream} from '../scripts/upstream-diagnostics.mjs';
+import {applyWindowsTestFixtures,createUpstreamWorkspace} from '../scripts/upstream-workspace.mjs';
 
 test('simulated OS paths and WSL context remain independent',()=>{
  assert.equal(stateRoot({platform:'win32',home:'C:\\Users\\테스트',env:{LOCALAPPDATA:'C:\\Users\\테스트\\AppData\\Local'}}),'C:\\Users\\테스트\\AppData\\Local\\Orbit Works');
@@ -77,4 +78,17 @@ test('CI annotations classify failures without raw names, paths or assertion str
 test('upstream diagnostics never publish runtime assertion strings or full paths',()=>{
  const summary=summarizeUpstream({numTotalTests:1,numPassedTests:0,numFailedTests:1,testResults:[{name:'C:\\PRIVATE-FIXTURE\\example.test.ts',assertionResults:[{status:'failed',title:'PRIVATE-FIXTURE',failureMessages:['AssertionError: expected false to be true; PRIVATE-FIXTURE'] }]}]},'server');
  assert.equal(summary.failures[0].file,'example.test.ts');assert.equal(summary.failures[0].actualBoolean,false);assert.ok(!JSON.stringify(summary).includes('PRIVATE-FIXTURE'));
+});
+test('Windows upstream fixtures are isolated and drift is rejected before any writes',()=>{
+ const base=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-upstream-overlay-'));
+ try{
+  assert.throws(()=>applyWindowsTestFixtures(path.resolve('vendor/pixel-agents')),/protected vendor/);
+  const workspace=createUpstreamWorkspace(base,{windows:false});
+  const fixture=path.join(workspace.directory,'server/__tests__/configPersistence.test.ts');
+  const original=fs.readFileSync(fixture,'utf8');fs.appendFileSync(fixture,'\n// drift');
+  const other=path.join(workspace.directory,'server/__tests__/cli.test.ts'),before=fs.readFileSync(other,'utf8');
+  assert.throws(()=>applyWindowsTestFixtures(workspace.directory),/source drift/);assert.equal(fs.readFileSync(other,'utf8'),before);
+  fs.writeFileSync(fixture,original);assert.equal(applyWindowsTestFixtures(workspace.directory).length,5);
+  assert.notEqual(fs.readFileSync(fixture,'utf8'),original);
+ }finally{fs.rmSync(base,{recursive:true,force:true});}
 });

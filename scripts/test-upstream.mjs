@@ -4,10 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import {root,verifyVendor} from './verify-vendor.mjs';
 import {summarizeUpstream} from './upstream-diagnostics.mjs';
+import {createUpstreamWorkspace} from './upstream-workspace.mjs';
 verifyVendor();
 const testHome=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-upstream-test-'));
-const vendor=path.join(root,'vendor/pixel-agents'),summaries=[];
+const workspace=createUpstreamWorkspace(testHome),vendor=workspace.directory,summaries=[];
 if(process.env.GITHUB_ACTIONS==='true')console.log(`::notice title=Orbit upstream runtime::${JSON.stringify({platform:process.platform,arch:process.arch,node:process.versions.node})}`);
+if(process.env.GITHUB_ACTIONS==='true'&&workspace.patched.length)console.log(`::notice title=Orbit upstream Windows fixtures::${JSON.stringify({scope:'temporary-test-copies',files:workspace.patched})}`);
 const env={...process.env,HOME:testHome,USERPROFILE:testHome,HUSKY:'0'};
 const phase=(name,args,cwd)=>{
  const result=runNpm(args,{cwd,env,stdio:'inherit'});
@@ -18,11 +20,11 @@ try{
  if(phase('compile',['run','compile'],vendor)){
   for(const suite of ['webview-ui','server']){
    const output=path.join(testHome,suite+'.json');
-   phase(suite,['test','--','--reporter=default','--reporter=json','--outputFile='+output],path.join(vendor,suite));
+   phase(suite,['test','--','--reporter=default','--reporter=allure-vitest/reporter','--reporter=json','--outputFile='+output],path.join(vendor,suite));
    if(fs.existsSync(output)){
     const summary=summarizeUpstream(JSON.parse(fs.readFileSync(output,'utf8')),suite);summaries.push(summary);
     if(process.env.GITHUB_ACTIONS==='true'){
-     console.log(`::notice title=Orbit upstream suite::${JSON.stringify({suite,total:summary.total,passed:summary.passed,failed:summary.failed,skipped:summary.skipped})}`);
+     console.log(`::notice title=Orbit upstream suite::${JSON.stringify({suite,total:summary.total,passed:summary.passed,failed:summary.failed,skipped:summary.skipped,failedFiles:[...new Set(summary.failures.map(f=>f.file))]})}`);
      for(const failure of summary.failures)console.log(`::error title=Orbit upstream test failure::${JSON.stringify(failure)}`);
     }
    }

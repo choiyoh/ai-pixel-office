@@ -1,0 +1,91 @@
+{
+  "upstream": "d1e007a9fdf3003c252d2973abe1999ae59aec33",
+  "scope": "Temporary Windows test fixture copies only; no engine/Provider/assertion removal",
+  "patches": [
+    {
+      "file": "server/__tests__/configPersistence.test.ts",
+      "replacements": [
+        {
+          "count": 1,
+          "before": "  let originalHome: string | undefined;",
+          "after": "  let originalHome: string | undefined;\n  let originalUserProfile: string | undefined;"
+        },
+        {
+          "count": 1,
+          "before": "    originalHome = process.env.HOME;\n    process.env.HOME = tempHome;",
+          "after": "    originalHome = process.env.HOME;\n    originalUserProfile = process.env.USERPROFILE;\n    process.env.HOME = tempHome;\n    process.env.USERPROFILE = tempHome;"
+        },
+        {
+          "count": 1,
+          "before": "    if (originalHome === undefined) {\n      delete process.env.HOME;\n    } else {\n      process.env.HOME = originalHome;\n    }",
+          "after": "    if (originalHome === undefined) {\n      delete process.env.HOME;\n    } else {\n      process.env.HOME = originalHome;\n    }\n    if (originalUserProfile === undefined) {\n      delete process.env.USERPROFILE;\n    } else {\n      process.env.USERPROFILE = originalUserProfile;\n    }"
+        }
+      ]
+    },
+    {
+      "file": "server/__tests__/consentFlow.test.ts",
+      "replacements": [
+        {
+          "count": 1,
+          "before": "  let originalHome: string | undefined;",
+          "after": "  let originalHome: string | undefined;\n  let originalUserProfile: string | undefined;"
+        },
+        {
+          "count": 1,
+          "before": "    originalHome = process.env.HOME;\n    process.env.HOME = tempHome;",
+          "after": "    originalHome = process.env.HOME;\n    originalUserProfile = process.env.USERPROFILE;\n    process.env.HOME = tempHome;\n    process.env.USERPROFILE = tempHome;"
+        },
+        {
+          "count": 1,
+          "before": "    if (originalHome === undefined) {\n      delete process.env.HOME;\n    } else {\n      process.env.HOME = originalHome;\n    }",
+          "after": "    if (originalHome === undefined) {\n      delete process.env.HOME;\n    } else {\n      process.env.HOME = originalHome;\n    }\n    if (originalUserProfile === undefined) {\n      delete process.env.USERPROFILE;\n    } else {\n      process.env.USERPROFILE = originalUserProfile;\n    }"
+        }
+      ]
+    },
+    {
+      "file": "server/__tests__/clientMessageHandler.test.ts",
+      "replacements": [
+        {
+          "count": 2,
+          "before": "  let originalHome: string | undefined;",
+          "after": "  let originalHome: string | undefined;\n  let originalUserProfile: string | undefined;"
+        },
+        {
+          "count": 2,
+          "before": "    originalHome = process.env.HOME;\n    process.env.HOME = tempHome;",
+          "after": "    originalHome = process.env.HOME;\n    originalUserProfile = process.env.USERPROFILE;\n    process.env.HOME = tempHome;\n    process.env.USERPROFILE = tempHome;"
+        },
+        {
+          "count": 2,
+          "before": "    if (originalHome === undefined) {\n      delete process.env.HOME;\n    } else {\n      process.env.HOME = originalHome;\n    }",
+          "after": "    if (originalHome === undefined) {\n      delete process.env.HOME;\n    } else {\n      process.env.HOME = originalHome;\n    }\n    if (originalUserProfile === undefined) {\n      delete process.env.USERPROFILE;\n    } else {\n      process.env.USERPROFILE = originalUserProfile;\n    }"
+        }
+      ]
+    },
+    {
+      "file": "server/__tests__/mockClaudeRunner.test.ts",
+      "replacements": [
+        {
+          "count": 1,
+          "before": "        HOME: tmpHome,",
+          "after": "        HOME: tmpHome,\n        USERPROFILE: tmpHome,"
+        },
+        {
+          "count": 1,
+          "before": "function makeNodeCommand(scriptPath: string): string {",
+          "after": "function makeNodeCommand(scriptPath: string): string {\n  if (process.platform === 'win32') return '\"' + process.execPath + '\" \"' + scriptPath + '\"';"
+        }
+      ]
+    },
+    {
+      "file": "server/__tests__/cli.test.ts",
+      "replacements": [
+        {
+          "count": 1,
+          "before": "expect(JSON.stringify(settings)).toContain(installedHook);",
+          "after": "expect(JSON.stringify(settings)).toContain(JSON.stringify(installedHook).slice(1, -1));"
+        }
+      ]
+    }
+  ]
+}
