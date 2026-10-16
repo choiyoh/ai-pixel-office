@@ -10,6 +10,13 @@ import {hookLaunch} from '../platform/launch.mjs';
 import {assertPrivate,ensurePrivateDirectory} from '../platform/private-files.mjs';
 import {sanitizeClaude} from '../server/claude-input.mjs';
 
+function integrationEvidence(stage,error){
+ if(!process.env.CI||!process.env.GITHUB_STEP_SUMMARY)return;
+ const scalar=value=>typeof value==='boolean'||(typeof value==='number'&&Number.isFinite(value))?value:null;
+ const evidence={stage,result:error?'failed':'passed',code:['ERR_ASSERTION','ORBIT_POWERSHELL_FAILED','EEXIST'].includes(error?.code)?error.code:null,actual:scalar(error?.actual),expected:scalar(error?.expected),permission:error?.code==='ORBIT_POWERSHELL_FAILED'?error.diagnostic:null};
+ try{fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,`\n### Integration checkpoint\n\n\`\`\`json\n${JSON.stringify(evidence,null,2)}\n\`\`\`\n`);}catch{ /* Never hide the test outcome if summary output fails. */ }
+}
+
 test('Hook dry-run preserves unknown user settings, redacts secrets, quotes spaces and writes nothing',()=>{
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-plan-'));
  try{
@@ -58,8 +65,10 @@ test('default Mock rejects hook writes and unauthenticated UI data, DNS rebindin
 test('synthetic authenticated hooks pass through isolated original Claude Provider and never become verified Mac evidence',async()=>{
  const base=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-intake-')),directory=path.join(base,'state');
  const instance=await createApp({mode:'claude-local',source:'fixture',stateDir:directory});
+ let stage='receiver-start';
  try{
   await instance.listen(0);const port=instance.app.server.address().port;
+  stage='registry-read';
   const registryFile=path.join(directory,'runtime/receiver.json'),registry=JSON.parse(fs.readFileSync(registryFile,'utf8'));
   assertPrivate(registryFile);
   const url=`http://127.0.0.1:${port}`;
@@ -67,12 +76,13 @@ test('synthetic authenticated hooks pass through isolated original Claude Provid
   const headers={'content-type':'application/json',authorization:`Bearer ${registry.token}`};
   const post=(provider,event)=>fetch(`${url}/api/hooks/${provider}`,{method:'POST',headers,body:JSON.stringify(event)});
   const event={session_id:'same-session',hook_event_name:'SessionStart'};
+  stage='auth-and-provider-validation';
   assert.equal((await fetch(`${url}/api/hooks/claude`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(event)})).status,401);
   assert.equal((await post('deepseek',event)).status,404);
-  assert.equal((await post('claude',event)).status,200);
+  stage='original-provider-normalization';assert.equal((await post('claude',event)).status,200);
   for(let i=1;i<=6;i++)assert.equal((await post('claude',{session_id:`session-${i}`,hook_event_name:'PreToolUse',tool_name:'Read',tool_input:{api_key:'DO-NOT-LEAK'}})).status,200);
   await post('claude',{...event,hook_event_name:'Stop'});
-  let snapshot=await (await fetch(`${url}/api/events`,{headers:{cookie}})).json();
+  stage='snapshot-projection';let snapshot=await (await fetch(`${url}/api/events`,{headers:{cookie}})).json();
   assert.equal(snapshot.source,'fixture');assert.equal(snapshot.validation,'unverified-on-real-environment');assert.equal(snapshot.sessions.length,7);
   assert.equal(snapshot.sessions.filter(s=>s.status==='working').length,6);assert.ok(snapshot.sessions.some(s=>s.status==='turn-ended'));
   assert.ok(!JSON.stringify(snapshot).includes('DO-NOT-LEAK'));assert.ok(!JSON.stringify(snapshot).includes('same-session'));
@@ -82,19 +92,24 @@ test('synthetic authenticated hooks pass through isolated original Claude Provid
   const launch=hookLaunch({node:process.execPath,forwarder});
   const invoke=process.platform==='win32'?launch.invocation:{command:'/bin/sh',args:['-c',launch.command]};
   const child=spawn(invoke.command,invoke.args,{env:{...process.env,ORBIT_STATE_DIR:directory},shell:false,stdio:['pipe','pipe','pipe']});
+  stage='hook-launch-exit';
   child.stdin.end(JSON.stringify({...event,hook_event_name:'PermissionRequest',prompt:'DO-NOT-LEAK'}));
   const output=[];child.stdout.on('data',x=>output.push(x));child.stderr.on('data',x=>output.push(x));
-  assert.equal(await new Promise(resolve=>child.on('exit',resolve)),0);assert.equal(Buffer.concat(output).length,0);
-  snapshot=await (await fetch(`${url}/api/events`,{headers:{cookie}})).json();assert.ok(snapshot.sessions.some(s=>s.status==='approval'));
+  assert.equal(await new Promise(resolve=>child.on('exit',resolve)),0);stage='hook-launch-output';assert.equal(Buffer.concat(output).length,0);
+  stage='hook-approval-event';snapshot=await (await fetch(`${url}/api/events`,{headers:{cookie}})).json();assert.ok(snapshot.sessions.some(s=>s.status==='approval'));
+  stage='connection-and-body-limit';
   assert.equal((await (await fetch(`${url}/api/connection`,{headers:{cookie}})).json()).realMacVerified,false);
   assert.equal((await fetch(`${url}/api/hooks/claude`,{method:'POST',headers,body:' '.repeat(66000)})).status,413);
- }finally{await instance.app.close();assert.ok(!fs.existsSync(path.join(directory,'runtime/receiver.json')));fs.rmSync(base,{recursive:true,force:true});}
+  integrationEvidence('synthetic-hooks-complete');
+ }catch(error){integrationEvidence(stage,error);throw error;}
+ finally{await instance.app.close();assert.ok(!fs.existsSync(path.join(directory,'runtime/receiver.json')));fs.rmSync(base,{recursive:true,force:true});}
 });
 
 test('existing runtime registry is not overwritten and invalid mode is refused',async()=>{
  const base=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-registry-')),directory=path.join(base,'state');ensurePrivateDirectory(directory);ensurePrivateDirectory(path.join(directory,'runtime'));
  const file=path.join(directory,'runtime/receiver.json');fs.writeFileSync(file,'user-owned-existing-file',{mode:0o600});
  const instance=await createApp({mode:'claude-local',source:'fixture',stateDir:directory});
- try{await assert.rejects(()=>instance.listen(0));assert.equal(fs.readFileSync(file,'utf8'),'user-owned-existing-file');await assert.rejects(()=>createApp({mode:'public'}));}
+ try{await assert.rejects(()=>instance.listen(0));assert.equal(fs.readFileSync(file,'utf8'),'user-owned-existing-file');await assert.rejects(()=>createApp({mode:'public'}));integrationEvidence('existing-registry-preserved');}
+ catch(error){integrationEvidence('existing-registry-protection',error);throw error;}
  finally{await instance.app.close();fs.rmSync(base,{recursive:true,force:true});}
 });
