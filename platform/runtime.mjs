@@ -39,10 +39,27 @@ export function powershellExecutable(env=process.env){
 }
 export const psQuote=value=>"'"+value.replaceAll("'","''")+"'";
 export function powershellInvocation(script,env=process.env){return {command:powershellExecutable(env),args:['-NoLogo','-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],shell:false};}
+// Do not attach raw child output, command arguments or paths to errors.
+export function powerShellDiagnostic(result){
+ const stages=new Set(['path','identity','read-acl','owner','protect-dacl','clear-dacl','create-sid','create-rule','add-rule','write-acl','verify-acl']);
+ const reasons=new Set(['operation','reparse-point','owner-not-allowed','untrusted-allow','missing-dacl']);
+ const types=new Set(['System.UnauthorizedAccessException','System.Security.SecurityException','System.Security.AccessControl.PrivilegeNotHeldException','System.ArgumentException','System.ArgumentNullException','System.InvalidOperationException','System.PlatformNotSupportedException','System.IO.IOException','System.IO.FileNotFoundException','System.IO.DirectoryNotFoundException','System.ComponentModel.Win32Exception','System.Management.Automation.RuntimeException','System.Management.Automation.MethodInvocationException','System.Management.Automation.ItemNotFoundException']);
+ let detail;
+ for(const line of String(result.stderr??'').split(/\r?\n/)){
+  if(!line.startsWith('ORBIT_ACL_FAILURE:'))continue;
+  try{const value=JSON.parse(line.slice('ORBIT_ACL_FAILURE:'.length));if(value&&typeof value==='object')detail=value;}catch{ /* Never fall back to raw output. */ }
+ }
+ const integer=value=>Number.isSafeInteger(value)&&value>=-2147483648&&value<=2147483647?value:null;
+ const codes=new Set(['ENOENT','EACCES','EPERM','ETIMEDOUT','ENOBUFS','EINVAL']);
+ return {exitCode:integer(result.status),spawnCode:codes.has(result.error?.code)?result.error.code:null,signal:['SIGTERM','SIGKILL','SIGABRT'].includes(result.signal)?result.signal:null,stage:stages.has(detail?.stage)?detail.stage:'engine',reason:reasons.has(detail?.reason)?detail.reason:'operation',exception:types.has(detail?.exception)?detail.exception:'unclassified',hresult:integer(detail?.hresult),nativeCode:integer(detail?.nativeCode),psMajor:integer(detail?.psMajor),psMinor:integer(detail?.psMinor),edition:['Desktop','Core'].includes(detail?.edition)?detail.edition:null};
+}
 export function runPowerShell(script,{env=process.env,...options}={}){
  const invocation=powershellInvocation(script,env);
  const result=spawnSync(invocation.command,invocation.args,{...options,env,shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
- if(result.error||result.status!==0)throw Error('Windows permission/launcher operation failed; no fallback to insecure permissions.');
+ if(result.error||result.status!==0){
+  const diagnostic=powerShellDiagnostic(result);
+  throw Object.assign(Error(`Windows permission/launcher operation failed: ${JSON.stringify(diagnostic)}; no fallback to insecure permissions.`),{code:'ORBIT_POWERSHELL_FAILED',diagnostic});
+ }
  return result;
 }
 export async function stopOwnedChild(child,{timeoutMs=2000}={}){

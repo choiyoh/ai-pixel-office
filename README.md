@@ -20,6 +20,8 @@ Windows PowerShell에서는 위 `npm`을 `npm.cmd`로 실행한다. 전체 설�
 - [macOS 설치](docs/install/macos.md)
 - [Windows 네이티브 / WSL 설치](docs/install/windows.md)
 - [Linux 설치](docs/install/linux.md)
+- [P2-A.1 Windows ACL 수정·CI 검증](docs/P2-A.1-WINDOWS-CI.md)
+- [P2-A.2 Live Canvas 설계 — 미구현](docs/P2-A.2-LIVE-CANVAS-DESIGN.md)
 - [크로스플랫폼 검증 결과와 남은 작업](docs/P2-A-CROSS-PLATFORM.md)
 - [운영체제 의존성 조사](docs/CROSS-PLATFORM-AUDIT.md)
 - [Command Code 준비와 확인되지 않은 API](docs/COMMAND-CODE.md)

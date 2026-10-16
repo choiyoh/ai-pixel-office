@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fork} from 'node:child_process';
-import {runtimeInfo,stateRoot,claudeSettings,npmInvocation,stopOwnedChild} from '../platform/runtime.mjs';
+import {runtimeInfo,stateRoot,claudeSettings,npmInvocation,stopOwnedChild,powerShellDiagnostic} from '../platform/runtime.mjs';
 import {hookLaunch,cliInvocation,isOrbitHookCommand} from '../platform/launch.mjs';
 import {windowsAclScript} from '../platform/private-files.mjs';
 
@@ -44,8 +44,19 @@ test('Command Code future invocation rejects unreviewed batch and native-to-WSL 
  assert.equal(cliInvocation({executable:'/example/tool',args:['a b'],cwd:'/example/repo'},{platform:'linux'}).command,'/example/tool');
 });
 test('Windows private-file policy verifies ACL SIDs and only protects newly-created paths',()=>{
- const script=windowsAclScript('C:\\state\\registry.json');assert.ok(script.includes('S-1-5-18'));assert.ok(script.includes('S-1-5-32-544'));assert.ok(script.includes('ReparsePoint'));assert.ok(!script.includes('Set-Acl'));
- assert.ok(windowsAclScript('C:\\new-state',{directory:true,create:true}).includes('Set-Acl'));
+ const script=windowsAclScript('C:\\state\\registry.json');assert.ok(script.includes('S-1-5-18'));assert.ok(script.includes('S-1-5-32-544'));assert.ok(script.includes('ReparsePoint'));assert.ok(!script.includes('SetAccessControl'));
+ const create=windowsAclScript('C:\\new-state',{directory:true,create:true});
+ assert.ok(create.includes('SetAccessControl'));assert.ok(!create.includes('SetOwner('));assert.ok(!create.includes('Set-Acl '));
+});
+test('PowerShell diagnostic keeps safe details and drops paths, credentials and command arguments',()=>{
+ const secret='PRIVATE-FIXTURE-DO-NOT-PRINT';
+ const result={status:1,stderr:`raw ${secret}\nORBIT_ACL_FAILURE:${JSON.stringify({stage:'write-acl',reason:'operation',exception:'System.UnauthorizedAccessException',hresult:-2147024891,nativeCode:5,psMajor:5,psMinor:1,edition:'Desktop',message:secret,path:secret})}\n`,stdout:secret,error:{message:secret,spawnargs:[secret]}};
+ const diagnostic=powerShellDiagnostic(result);
+ assert.equal(diagnostic.stage,'write-acl');assert.equal(diagnostic.exitCode,1);assert.equal(diagnostic.nativeCode,5);assert.equal(diagnostic.exception,'System.UnauthorizedAccessException');assert.ok(!JSON.stringify(diagnostic).includes(secret));
+ const untrusted=powerShellDiagnostic({status:1,stderr:`ORBIT_ACL_FAILURE:${JSON.stringify({stage:secret,reason:secret,exception:secret,hresult:secret,psMajor:{secret},edition:secret})}`});
+ assert.equal(untrusted.stage,'engine');assert.equal(untrusted.exception,'unclassified');assert.ok(!JSON.stringify(untrusted).includes(secret));
+ assert.equal(powerShellDiagnostic({status:null,error:{code:'ENOENT',message:secret}}).spawnCode,'ENOENT');
+ const timeout=powerShellDiagnostic({status:null,error:{code:'ETIMEDOUT'},signal:'SIGTERM',stderr:'ORBIT_ACL_FAILURE:{broken'});assert.equal(timeout.spawnCode,'ETIMEDOUT');assert.equal(timeout.stage,'engine');
 });
 test('owned process shutdown uses IPC on the actual host OS',async()=>{
  const file=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'orbit child ')),'worker.cjs');
