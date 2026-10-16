@@ -14,7 +14,7 @@
 
 ## 실제 원인과 수정
 
-원래 오류는 Windows PowerShell 5.1의 Get-Acl 모듈 자동 로딩 실패였다. 공개 안전 진단에서 stage=read-acl, reason=module-resolution, System.Management.Automation.RuntimeException, HRESULT=-2146233087, Desktop5.1이 확인되었다. 같은 fixture를 읽는 기존 Get-Acl 호출도 실패하는 비교 검사를 남겼다. PS7에서 상속된 특정 모듈 경로의 원문은 수집·공개하지 않았으며, 확정된 장애 지점은 PS5.1 보안 cmdlet의 자동 로딩이다. 기존 runPowerShell이 모든 하위 실패를 일반 permission 메시지로 치환해 원인이 가려졌다.
+확인된 장애는 Windows PowerShell 5.1의 보안 cmdlet 모듈 자동 로딩 실패였다. 기준5993dd9는 Set-Acl/Get-Acl을 사용했고, 안전한 진단을 추가한 실행에서는 Get-Acl 읽기 단계에서 재현되었다. 원래 일반 메시지에 버려진 하위 ErrorRecord를 직접 확인했다고 주장하지 않는다. 공개 안전 진단에서 stage=read-acl, reason=module-resolution, System.Management.Automation.RuntimeException, HRESULT=-2146233087, Desktop5.1이 확인되었다. 같은 fixture를 읽는 기존 Get-Acl 호출도 실패하는 비교 검사를 남겼다. PS7에서 상속된 특정 모듈 경로의 원문은 수집·공개하지 않았으며, 확정된 장애 지점은 PS5.1 보안 cmdlet의 자동 로딩이다. 기존 runPowerShell이 모든 하위 실패를 일반 permission 메시지로 치환해 원인이 가려졌다.
 
 PS7 러너에서 시작한 PS5.1 하위 프로세스의 모듈 환경을 초기화하는 접근은 모듈 탐색 시간 초과를 남겼다. 최종 구현은 Get-Item/Get-Acl/Set-Acl/ConvertTo-Json 자동 로딩 의존성을 제거하고 .NET DirectoryInfo/FileInfo, DirectorySecurity/FileSecurity API를 직접 사용한다. PS5.1은 instance SetAccessControl, PS7은 FileSystemAclExtensions.SetAccessControl로 DACL만 persist한다. 기존 owner/group/audit를 다시 쓰지 않는다.
 
