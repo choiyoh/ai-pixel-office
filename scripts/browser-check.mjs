@@ -2,16 +2,20 @@ import {chromium,expect} from '@playwright/test';
 import fs from 'node:fs';
 import {publishBrowserFailure} from './browser-diagnostics.mjs';
 fs.mkdirSync('artifacts',{recursive:true});
-let browser,stage='launch';
+let browser,stage='launch',initialStartedAt,assetStatus=null;
 const errors=[],network=[];
 try{
  browser=await chromium.launch({...(process.env.ORBIT_BROWSER_EXECUTABLE?{executablePath:process.env.ORBIT_BROWSER_EXECUTABLE}:{}),headless:true});
  const page=await browser.newPage({viewport:{width:1440,height:1100},deviceScaleFactor:1});
  page.on('pageerror',e=>errors.push(e.message));
- page.on('response',r=>{if(r.status()>=400)network.push(`${r.status()} ${r.url()}`);});
+ page.on('response',r=>{if(new URL(r.url()).pathname==='/engine-assets.json')assetStatus=r.status();if(r.status()>=400)network.push(`${r.status()} ${r.url()}`);});
  stage='initial-agents';
+ initialStartedAt=Date.now();
  await page.goto(process.env.ORBIT_BASE_URL??'http://127.0.0.1:4173');
- await expect(page.getByTestId('agent-6')).toBeVisible();
+ // Initial membership depends on asynchronous asset loading and engine setup.
+ // Give that startup the same bounded budget as server readiness, not the
+ // default five-second interaction assertion budget. Do not retry/reload.
+ await expect(page.getByTestId('agent-6')).toBeVisible({timeout:20000});
  await expect(page.locator('.agent-card')).toHaveCount(6);
  await expect.poll(async()=>JSON.parse((await page.locator('canvas').getAttribute('data-actors'))??'[]').length).toBe(6);
  await page.waitForTimeout(2500);
@@ -57,5 +61,5 @@ try{
  stage='browser-errors';expect(errors).toEqual([]);expect(network).toEqual([]);
  fs.writeFileSync('artifacts/browser-result.json',JSON.stringify({status:'passed',concurrentAgents:6,checks:['8 explicit Mock states','project and agent filters','seat/layout persisted across reload','zoom','remove and respawn','timed scenario','desktop and mobile','no JS or HTTP errors'],errors,network},null,2));
  console.log('Browser acceptance checks passed.');
-}catch(e){const detail=publishBrowserFailure(stage,e);fs.writeFileSync('artifacts/browser-result.json',JSON.stringify({status:'failed',detail,jsErrors:errors.length,httpErrors:network.length},null,2));throw Error('Browser acceptance failed: '+JSON.stringify(detail));}
+}catch(e){const detail=publishBrowserFailure(stage,e);const readiness={elapsedMs:initialStartedAt?Date.now()-initialStartedAt:null,assetStatus,jsErrors:errors.length,httpErrors:network.length};if(process.env.GITHUB_ACTIONS==='true')console.log('::notice title=Orbit browser readiness::'+JSON.stringify(readiness));fs.writeFileSync('artifacts/browser-result.json',JSON.stringify({status:'failed',detail,...readiness},null,2));throw Error('Browser acceptance failed: '+JSON.stringify(detail));}
 finally{await browser?.close();}

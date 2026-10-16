@@ -24,6 +24,8 @@ Hook launcher의 392바이트 출력 문제는 process-local ProgressPreference�
 
 오류 공개 정보는 고정 단계/이유/예외 종류, 숫자 HRESULT/native/exit 코드와 PS 버전뿐이다. raw stderr/예외 메시지/명령줄/환경 값/사용자 경로/토큰을 공개 annotation에 쓰지 않는다. 브라우저는 고정 검사 단계와 안전한 scalar 값만 공개한다. 실패 종료 코드를 보존하고 테스트 기준을 느슨하게 만들지 않았다. 브라우저 단계 진단 추가 후 전체 성공을 확인했다. 첫 Canvas snapshot이 null일 때 expect.poll callback이 TypeError로 즉시 종료될 수 있는 점도 확인해 null을 빈 배열로 처리하도록 보완했다. 필요한 actor 수·좌석·상태 검사는 그대로 기다려 검증한다. 앞선 일시적 브라우저 실패가 이 race 때문이었다고 단정하지 않는다.
 
+후속 d09b71b 실행38882803582에서는 Windows 초기 agent-6 표시 검사가 기본5초 대기로 timeout했고 나머지 두 OS는 성공했다. 초기 멤버십은 비동기 에셋 로딩/엔진 준비 후 나타나므로 서버 시작과 같은 제한20초를 초기 표시 검사에만 적용했다. 재시도·reload·검사 생략은 없다. 로컬 Chromium에서 에셋 응답을6.5초 지연시켜 기존5초 실패와 보완된 대기의6개 actor 통과를 재현했다. 해당 CI의 실제 지연 원인을 이 재현과 동일하다고 단정하지 않는다. 재발 시 응답 상태/JS·HTTP 오류 개수/경과 시간만 안전하게 출력한다. 최종 판정은 이 보완을 포함한 세 OS 전체 CI 결과를 따른다.
+
 ## 추가로 드러난 원본 Windows fixture 문제
 
 앱 통합 통과 후 원본 서버 테스트에서 23개 실패가 발견되었다(run 38879190021). 일부 fixture는 HOME만 바꾸지만 Windows os.homedir는 USERPROFILE을 사용했다. CLI path를 JSON 문자열과 비교하는 검사와 mock command의 Windows quoting에도 표현 문제가 있었다.
