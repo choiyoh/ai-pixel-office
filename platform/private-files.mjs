@@ -36,6 +36,7 @@ export function windowsAclScript(file,{directory=false,create=false}={}){
   if($rule.AccessControlType -eq 'Allow' -and $allowed -notcontains $rule.IdentityReference.Value){$reason='untrusted-allow'; throw 'refused'}
  }
  } catch {
+ if($reason -eq 'operation' -and $_.FullyQualifiedErrorId -match 'AutoLoad|Module'){$reason='module-resolution'};
  $failure=$_.Exception; while($null -ne $failure.InnerException){$failure=$failure.InnerException};
  $native=$null; if($failure -is [ComponentModel.Win32Exception]){$native=$failure.NativeErrorCode};
  $detail=@{stage=$stage;reason=$reason;exception=$failure.GetType().FullName;hresult=$failure.HResult;nativeCode=$native;psMajor=$PSVersionTable.PSVersion.Major;psMinor=$PSVersionTable.PSVersion.Minor;edition=$PSVersionTable.PSEdition};

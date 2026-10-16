@@ -5,12 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {windowsAclScript,assertPrivate,ensurePrivateDirectory,writePrivateExclusive} from '../platform/private-files.mjs';
-import {powershellInvocation,powerShellDiagnostic,psQuote,runPowerShell} from '../platform/runtime.mjs';
+import {powershellInvocation,powerShellDiagnostic,psQuote,runPowerShell,windowsPowerShellEnvironment} from '../platform/runtime.mjs';
 
 // Mutate test-owned temporary fixtures only; never inspect user settings.
 function execute(script,engine='desktop'){
  const invocation=powershellInvocation(script);
- const result=spawnSync(engine==='core'?'pwsh.exe':invocation.command,invocation.args,{shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
+ const result=spawnSync(engine==='core'?'pwsh.exe':invocation.command,invocation.args,{env:engine==='core'?process.env:windowsPowerShellEnvironment(),shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
  if(result.error||result.status!==0){
   const diagnostic=powerShellDiagnostic(result);
   // Job summaries are visible without exposing raw PowerShell stderr/paths.
@@ -28,6 +28,16 @@ for(const engine of ['desktop','core'])test(`Windows ${engine==='desktop'?'Power
  }
  const base=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-acl-')),directory=path.join(base,"New's 공백"),file=path.join(directory,'registry.json');fs.mkdirSync(directory);
  try{
+  if(engine==='desktop'){
+   // Read the same test-owned folder with the unmodified inherited environment.
+   const probe=`$ErrorActionPreference='Stop'; try{$null=Get-Acl -LiteralPath ${psQuote(directory)}}catch{
+    $reason='operation'; if($_.FullyQualifiedErrorId -match 'AutoLoad|Module'){$reason='module-resolution'};
+    $e=$_.Exception; while($null -ne $e.InnerException){$e=$e.InnerException};
+    [Console]::Error.WriteLine('ORBIT_ACL_FAILURE:'+(ConvertTo-Json -Compress -InputObject @{stage='read-acl';reason=$reason;exception=$e.GetType().FullName;hresult=$e.HResult;psMajor=$PSVersionTable.PSVersion.Major;psMinor=$PSVersionTable.PSVersion.Minor;edition=$PSVersionTable.PSEdition})); exit 1}`;
+   const invocation=powershellInvocation(probe);
+   const legacy=spawnSync(invocation.command,invocation.args,{env:process.env,shell:false,windowsHide:true,encoding:'utf8',timeout:15000});
+   t.diagnostic('ORBIT_CI_PROBE:'+JSON.stringify({kind:'ps-module-environment',legacyFailed:legacy.status!==0,legacy:powerShellDiagnostic(legacy)}));
+  }
   const output=execute(`$before=Get-Acl -LiteralPath ${psQuote(directory)}; `+windowsAclScript(directory,{directory:true,create:true})+`
    $after=Get-Acl -LiteralPath ${psQuote(directory)};
    [Console]::Out.Write((ConvertTo-Json -Compress -InputObject @{ownerPreserved=($before.Owner -eq $after.Owner);groupPreserved=($before.Group -eq $after.Group);protected=$after.AreAccessRulesProtected;major=$PSVersionTable.PSVersion.Major}));`,engine);

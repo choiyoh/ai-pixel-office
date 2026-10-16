@@ -19,5 +19,15 @@ export function safeCiFailure(data){
 // Runs in the Node CLI reporter process, outside test-child TAP capture, so
 // GitHub recognizes annotations. Never emit raw errors, test paths or payloads.
 export default async function* reporter(events){
- for await(const event of events)if(event.type==='test:fail')yield `\n::error title=Orbit integration failure::${JSON.stringify(safeCiFailure(event.data))}\n`;
+ for await(const event of events){
+  if(event.type==='test:fail')yield `\n::error title=Orbit integration failure::${JSON.stringify(safeCiFailure(event.data))}\n`;
+  if(event.type==='test:diagnostic'&&event.data.message?.startsWith('ORBIT_CI_PROBE:'))try{
+   const probe=JSON.parse(event.data.message.slice('ORBIT_CI_PROBE:'.length));
+   if(probe.kind==='ps-module-environment'){
+    const detail=probe.legacy??{};
+    const safe={kind:'ps-module-environment',legacyFailed:probe.legacyFailed===true,legacy:powerShellDiagnostic({status:detail.exitCode,stderr:'ORBIT_ACL_FAILURE:'+JSON.stringify(detail)})};
+    yield `\n::notice title=Orbit PowerShell module environment::${JSON.stringify(safe)}\n`;
+   }
+  }catch{ /* Unknown diagnostics are never published. */ }
+ }
 }
