@@ -12,7 +12,7 @@ export function hookLaunch({node,forwarder,platform=process.platform}){
  if(!p.isAbsolute(node)||!p.isAbsolute(forwarder))throw Error('Hook executables must use absolute paths from the same environment');
  if(/[\r\n\0]/.test(node+forwarder))throw Error('Invalid executable path');
  if(platform==='win32'){
-  const script=`$ErrorActionPreference='Stop'; [Console]::InputEncoding=[Text.UTF8Encoding]::new($false); [Console]::OutputEncoding=$OutputEncoding=[Text.UTF8Encoding]::new($false); $raw=[Console]::In.ReadToEnd(); $raw | & ${psQuote(node)} ${psQuote(forwarder)}; exit $LASTEXITCODE`;
+  const script=`$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::InputEncoding=[Text.UTF8Encoding]::new($false); [Console]::OutputEncoding=$OutputEncoding=[Text.UTF8Encoding]::new($false); $raw=[Console]::In.ReadToEnd(); $raw | & ${psQuote(node)} ${psQuote(forwarder)}; exit $LASTEXITCODE`;
   const invocation=powershellInvocation(script);
   // ASCII outer command works in native hook hosts without POSIX path quoting.
   return {command:`powershell.exe ${invocation.args.join(' ')}`,host:'windows-powershell',script,invocation};

@@ -13,7 +13,8 @@ export function safeCiFailure(data){
   const detail=JSON.parse(match[1]);
   permission=powerShellDiagnostic({status:detail.exitCode,signal:detail.signal,error:{code:detail.spawnCode},stderr:'ORBIT_ACL_FAILURE:'+JSON.stringify(detail)});
  }catch{ /* No raw message fallback. */ }
- return {case:caseId,code:['ERR_ASSERTION','ORBIT_POWERSHELL_FAILED'].includes(error?.code)?error.code:null,actual:scalar(error?.actual),expected:scalar(error?.expected),permission};
+ const output=String(error?.message??'').match(/PowerShell launcher output category=(progress|clixml-other|other)\b/)?.[1]??null;
+ return {case:caseId,code:['ERR_ASSERTION','ORBIT_POWERSHELL_FAILED'].includes(error?.code)?error.code:null,actual:scalar(error?.actual),expected:scalar(error?.expected),launcherOutput:output,permission};
 }
 
 // Runs in the Node CLI reporter process, outside test-child TAP capture, so

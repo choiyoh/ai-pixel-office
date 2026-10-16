@@ -95,7 +95,10 @@ test('synthetic authenticated hooks pass through isolated original Claude Provid
   stage='hook-launch-exit';
   child.stdin.end(JSON.stringify({...event,hook_event_name:'PermissionRequest',prompt:'DO-NOT-LEAK'}));
   const output=[];child.stdout.on('data',x=>output.push(x));child.stderr.on('data',x=>output.push(x));
-  assert.equal(await new Promise(resolve=>child.on('exit',resolve)),0);stage='hook-launch-output';assert.equal(Buffer.concat(output).length,0);
+  assert.equal(await new Promise(resolve=>child.on('exit',resolve)),0);stage='hook-launch-output';
+  const bytes=Buffer.concat(output),text=bytes.toString('utf8');
+  const category=/S=["']progress["']/i.test(text)?'progress':text.includes('CLIXML')?'clixml-other':'other';
+  assert.equal(bytes.length,0,'PowerShell launcher output category='+category);
   stage='hook-approval-event';snapshot=await (await fetch(`${url}/api/events`,{headers:{cookie}})).json();assert.ok(snapshot.sessions.some(s=>s.status==='approval'));
   stage='connection-and-body-limit';
   assert.equal((await (await fetch(`${url}/api/connection`,{headers:{cookie}})).json()).realMacVerified,false);
