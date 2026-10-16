@@ -8,6 +8,7 @@ import {runtimeInfo,stateRoot,claudeSettings,npmInvocation,stopOwnedChild,powerS
 import {hookLaunch,cliInvocation,isOrbitHookCommand} from '../platform/launch.mjs';
 import {windowsAclScript} from '../platform/private-files.mjs';
 import {safeCiFailure} from '../scripts/ci-diagnostics.mjs';
+import {summarizeUpstream} from '../scripts/upstream-diagnostics.mjs';
 
 test('simulated OS paths and WSL context remain independent',()=>{
  assert.equal(stateRoot({platform:'win32',home:'C:\\Users\\테스트',env:{LOCALAPPDATA:'C:\\Users\\테스트\\AppData\\Local'}}),'C:\\Users\\테스트\\AppData\\Local\\Orbit Works');
@@ -72,4 +73,8 @@ test('CI annotations classify failures without raw names, paths or assertion str
  assert.equal(failure.case,'synthetic-hooks');assert.equal(failure.expected,false);assert.equal(failure.actual,null);assert.ok(!JSON.stringify(failure).includes(privateText));
  const diagnostic=safeCiFailure({name:'PowerShell 5.1',details:{error:{message:'Windows ACL fixture failed: '+JSON.stringify({exitCode:1,stage:'write-acl',exception:'System.UnauthorizedAccessException',message:privateText})}}});
  assert.ok(diagnostic.permission);assert.equal(diagnostic.permission.stage,'write-acl');assert.ok(!JSON.stringify(diagnostic).includes(privateText));
+});
+test('upstream diagnostics never publish runtime assertion strings or full paths',()=>{
+ const summary=summarizeUpstream({numTotalTests:1,numPassedTests:0,numFailedTests:1,testResults:[{name:'C:\\PRIVATE-FIXTURE\\example.test.ts',assertionResults:[{status:'failed',title:'PRIVATE-FIXTURE',failureMessages:['AssertionError: expected false to be true; PRIVATE-FIXTURE'] }]}]},'server');
+ assert.equal(summary.failures[0].file,'example.test.ts');assert.equal(summary.failures[0].actualBoolean,false);assert.ok(!JSON.stringify(summary).includes('PRIVATE-FIXTURE'));
 });
