@@ -38,6 +38,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
       - run: npm run test:connection-browser
+      - run: npm run test:live-browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:

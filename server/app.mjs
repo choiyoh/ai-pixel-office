@@ -12,8 +12,9 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
  if(!['mock','claude-local'].includes(mode))throw Error('Unsupported ORBIT_MODE');
  const app=Fastify({logger:false,bodyLimit:65536});
  const receiver=mode==='claude-local'?makeReceiver({source}):null;
+ app.setErrorHandler((error,request,reply)=>{reply.code(error.statusCode===413?413:503).send({error:error.statusCode===413?'body-too-large':'service-unavailable'});});
  const cookieSecret=randomBytes(32).toString('hex');
- let registry=null;
+ let registry=null,registryOwned=false;
  app.addHook('onRequest',async(request,reply)=>{
   const host=request.headers.host;
   if(!host||!/^((127\.0\.0\.1)|(localhost))(:\d+)?$/.test(host))return reply.code(403).send({error:'loopback-host-required'});
@@ -21,7 +22,7 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
   if(request.method==='GET'&&(request.url==='/'||request.url.startsWith('/?'))){reply.header('set-cookie',`orbit_session=${cookieSecret}; HttpOnly; SameSite=Strict; Path=/`);}
   reply.header('x-content-type-options','nosniff');reply.header('referrer-policy','no-referrer');
   if(request.url.startsWith('/api/'))reply.header('cache-control','no-store');
-  if(['/api/connection','/api/events'].includes(request.routeOptions.url)){
+  if(['/api/connection','/api/events','/api/live/snapshot','/api/live/events'].includes(request.routeOptions.url)){
    const candidate=(request.headers.cookie??'').split(';').map(s=>s.trim()).find(s=>s.startsWith('orbit_session='))?.slice(14)??'';
    const a=Buffer.from(candidate),b=Buffer.from(cookieSecret);
    if(a.length!==b.length||!timingSafeEqual(a,b))return reply.code(401).send({error:'local-session-required'});
@@ -33,6 +34,8 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
   return {mode,...runtimeInfo(),environment,node:process.versions.node,connection:receiver?(snapshot.lastEventAt?'events-received':'awaiting-events'):'mock-only',source:snapshot?.source??'mock',lastEventAt:snapshot?.lastEventAt??null,realMacVerified:false,realEnvironmentVerified:false};
  });
  app.get('/api/events',()=>receiver?.snapshot()??{source:'mock',validation:'not-live',lastEventAt:null,sequence:0,sessions:[]});
+ app.get('/api/live/snapshot',async(request,reply)=>receiver?receiver.liveSnapshot():reply.code(409).send({ready:false,error:'receiver-not-prepared'}));
+ app.get('/api/live/events',async(request,reply)=>receiver?receiver.changes(request.query.after):reply.code(409).send({ready:false,error:'receiver-not-prepared'}));
  app.post('/api/hooks/:providerId',async(request,reply)=>{
   if(!receiver)return reply.code(409).send({error:'receiver-disabled-in-mock-mode'});
   if(!receiver.authorized(request.headers.authorization))return reply.code(401).send({error:'unauthorized'});
@@ -53,7 +56,9 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
     ensurePrivateDirectory(directory);
     registry=path.join(directory,'receiver.json');
     writePrivateExclusive(registry,{port:app.server.address().port,token:receiver.token,pid:process.pid});
-   }catch(error){registry=null;await app.close();throw error;}
+    registryOwned=true;
+    receiver.initialize({directory:path.join(stateRoot,'live'),environment:`${runtimeInfo().platform}/${runtimeInfo().arch}${runtimeInfo().wsl?' · WSL':''}`});
+   }catch(error){if(!registryOwned)registry=null;await app.close();throw error;}
   }
  }};
 }

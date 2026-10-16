@@ -6,13 +6,21 @@ import {createOffice,syncAgent} from './engine';
 import {layoutKey,seatsKey} from './layout';
 import {officeTimezone,roster,statuses,statusLabels,reduceAgents,todayCompleted,type Agent,type OfficeEvent,type Status} from './model';
 import {initialEvents,playScenario} from './mock';
+import {LiveOffice} from './live/LiveOffice';
+import {ModeSwitch} from './ModeSwitch';
 
 export function App(){
+ const [mode,setMode]=useState<'mock'|'live'>(()=>{try{return localStorage.getItem('orbit.mode.v1')==='live'?'live':'mock';}catch{return 'mock';}});
+ const changeMode=(next:'mock'|'live')=>{setMode(next);try{localStorage.setItem('orbit.mode.v1',next);}catch{ /* mode still works without storage */ }};
+ return <><MockOffice active={mode==='mock'} onMode={changeMode}/><LiveOffice active={mode==='live'} onMode={changeMode}/></>;
+}
+function MockOffice({active:enabled,onMode}:{active:boolean;onMode:(mode:'mock'|'live')=>void}){
  const [office,setOffice]=useState<OfficeState|null>(null),[error,setError]=useState('');
  const [agents,setAgents]=useState<Agent[]>([]),[events,setEvents]=useState<OfficeEvent[]>([]);
  const [selected,setSelected]=useState(1),[project,setProject]=useState('all'),[agentFilter,setAgentFilter]=useState('all');
  const [zoom,setZoom]=useState(1),[now,setNow]=useState(Date.now()),[playing,setPlaying]=useState(false),[notice,setNotice]=useState('');
  const agentsRef=useRef<Agent[]>([]),eventsRef=useRef<OfficeEvent[]>([]),seen=useRef(new Set<string>()),stopRef=useRef<(()=>void)|null>(null);
+ const initialized=useRef(false);
  const apply=useCallback((event:OfficeEvent)=>{
   if(!office||seen.current.has(event.eventId))return;
   seen.current.add(event.eventId);
@@ -21,13 +29,15 @@ export function App(){
   else {const a=next.find(a=>a.id===event.agentId);if(a)syncAgent(office,a,event.type==='spawn');}
   const history=[event,...eventsRef.current].slice(0,1000);eventsRef.current=history;setEvents(history);
  },[office]);
- useEffect(()=>{let cancelled=false;createOffice().then(o=>{if(!cancelled)setOffice(o);}).catch(e=>{if(!cancelled)setError(String(e));});return()=>{cancelled=true;};},[]);
+ useEffect(()=>{if(!enabled||office)return;let cancelled=false;createOffice().then(o=>{if(!cancelled)setOffice(o);}).catch(()=>{if(!cancelled)setError('에셋과 사무실 구성을 확인하세요.');});return()=>{cancelled=true;};},[enabled,office]);
  useEffect(()=>{
-  if(!office)return;
+  if(!enabled||!office||initialized.current)return;
+  initialized.current=true;
   for(const event of initialEvents(Date.now()))apply(event);
- },[office,apply]);
+ },[enabled,office,apply]);
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
  useEffect(()=>()=>stopRef.current?.(),[]);
+ useEffect(()=>{if(!enabled){stopRef.current?.();setPlaying(false);}},[enabled]);
  const visible=agents.filter(a=>(project==='all'||a.project===project)&&(agentFilter==='all'||String(a.id)===agentFilter));
  const current=visible.find(a=>a.id===selected);
  const active=visible.filter(a=>['coding','analysis','testing'].includes(a.status)).length;
@@ -48,11 +58,12 @@ export function App(){
   office.update(1);agentsRef.current=[];eventsRef.current=[];seen.current.clear();setAgents([]);setEvents([]);
   for(const event of initialEvents(Date.now()))apply(event);
  };
+ if(!enabled)return null;
  if(error)return <div className="error-page"><h1>사무실을 열지 못했습니다</h1><p>{error}</p><button onClick={()=>location.reload()}>다시 시도</button></div>;
  return <div className="app-shell">
   <aside className="rail"><div className="brand-mark">o<span>✦</span></div><div className="rail-icon active" title="Office">▦</div><a className="rail-icon" href="#team" aria-label="팀 목록">♟</a><a className="rail-icon" href="#timeline" aria-label="이벤트">≋</a><div className="rail-bottom">OW<br/><span>01</span></div></aside>
   <div className="workspace">
-   <header><div><div className="eyebrow">A SMALL OFFICE. BIG IDEAS.</div><h1>Orbit Works <span>AI 개발회사</span></h1></div><div className="header-right"><span className="mock-badge"><i/> MOCK SANDBOX</span><span className="date">캔버스 Mock · 연결 상태 별도 표시</span></div></header>
+   <header><div><div className="eyebrow">A SMALL OFFICE. BIG IDEAS.</div><h1>Orbit Works <span>AI 개발회사</span></h1></div><div className="header-right"><ModeSwitch mode="mock" onMode={onMode}/><span className="date">캔버스 Mock · 연결 상태 별도 표시</span></div></header>
    <ConnectionPanel/>
    <section className="overview"><div className="intro"><span className="live-dot"/> OFFICE OVERVIEW <small>여섯 동료가 만드는 작은 우주</small></div><div className="metric"><b>{active.toString().padStart(2,'0')}</b><span>작업 중</span><i className="mint"/></div><div className="metric"><b>{waiting.toString().padStart(2,'0')}</b><span>승인 대기</span><i className="amber"/></div><div className="metric"><b>{todayCompleted(filteredEvents,now).toString().padStart(2,'0')}</b><span>오늘 완료 · Mock</span><i className="lilac"/></div></section>
    <main><section className="office-panel">

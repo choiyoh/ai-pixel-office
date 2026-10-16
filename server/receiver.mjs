@@ -1,11 +1,12 @@
 import {fork} from 'node:child_process';
-import {createHash,randomBytes,timingSafeEqual} from 'node:crypto';
+import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {stopOwnedChild} from '../platform/runtime.mjs';
 import {sanitizeClaude} from './claude-input.mjs';
+import {openLiveProjection} from './live-projection.mjs';
 export function makeReceiver({source='live',maxSessions=100}={}){
- const token=randomBytes(32).toString('hex'),sessions=new Map();
- let worker=null,requestId=0,lastEventAt=null,sequence=0;
+ const token=randomBytes(32).toString('hex');
+ let worker=null,requestId=0,projection=null,queue=Promise.resolve(),queued=0,closed=false;
  const pending=new Map();
  const failPending=()=>{for(const entry of pending.values()){clearTimeout(entry.timer);entry.reject(Error('worker unavailable'));}pending.clear();};
  const start=()=>{
@@ -19,28 +20,34 @@ export function makeReceiver({source='live',maxSessions=100}={}){
  };
  return {
   token,
+  initialize(options){if(projection)throw Error('Receiver already initialized');projection=openLiveProjection({...options,source,maxSessions});},
   authorized(header){const a=Buffer.from(header??''),b=Buffer.from(`Bearer ${token}`);return a.length===b.length&&timingSafeEqual(a,b);},
   async receive(providerId,body){
    if(providerId!=='claude')throw Object.assign(Error('unsupported provider'),{statusCode:404});
    const raw=sanitizeClaude(body);
-   if(pending.size>=64)throw Object.assign(Error('receiver busy'),{statusCode:429});
-   const child=start(),id=++requestId;
-   const normalized=await new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{pending.delete(id);reject(Error('worker timeout'));},2000);
-    pending.set(id,{resolve,reject,timer});child.send({requestId:id,raw});
+   if(!projection||closed)throw Object.assign(Error('receiver unavailable'),{statusCode:503});
+   if(queued>=64)throw Object.assign(Error('receiver busy'),{statusCode:429});
+   queued++;
+   const operation=queue.then(async()=>{
+    if(closed)throw Error('receiver closed');
+    const child=start(),id=++requestId;
+    const normalized=await new Promise((resolve,reject)=>{
+     const timer=setTimeout(()=>{pending.delete(id);reject(Error('worker timeout'));},2000);
+     pending.set(id,{resolve,reject,timer});child.send({requestId:id,raw});
+    });
+    if(!normalized.normalized)return {accepted:false,reason:'ignored-by-provider'};
+    if(closed)throw Error('receiver closed');
+    return projection.apply(normalized.normalized);
    });
-   if(!normalized.normalized)return {accepted:false,reason:'ignored-by-provider'};
-   const {sessionId,kind,awaitingInput}=normalized.normalized;
-   const sessionKey=createHash('sha256').update(JSON.stringify(['claude',sessionId])).digest('hex').slice(0,24);
-   const previous=sessions.get(sessionKey);const at=new Date().toISOString();
-   // Preserve uncertainty: a tool start isn't proof of coding/analysis,
-   // and Stop is a turn end, not proof that an overall task succeeded.
-   const status=normalized.failure?'tool-failed':kind==='toolStart'?'working':kind==='permissionRequest'?'approval':kind==='turnEnd'?(awaitingInput?'waiting-input':'turn-ended'):kind==='sessionEnd'?'session-ended':kind==='sessionStart'?'observed':kind==='toolEnd'?'between-tools':previous?.status??'unknown';
-   if(!previous&&sessions.size>=maxSessions)throw Object.assign(Error('session capacity'),{statusCode:429});
-   sessions.set(sessionKey,{sessionKey,providerId:'claude',name:`Claude · ${sessionKey.slice(0,6)}`,source,kind,status,lastEventAt:at,sequence:++sequence});lastEventAt=at;
-   return {accepted:true};
+   queue=operation.catch(()=>{});
+   try{return await operation;}finally{queued--;}
   },
-  snapshot(){return {source,validation:'unverified-on-real-environment',lastEventAt,sequence,sessions:[...sessions.values()]};},
-  async close(){failPending();if(worker){const child=worker;worker=null;await stopOwnedChild(child);}}
+  liveSnapshot(){if(!projection)throw Error('receiver not ready');return projection.snapshot();},
+  changes(cursor){if(!projection)throw Error('receiver not ready');return projection.changes(cursor);},
+  snapshot(){
+   const data=projection?.snapshot();
+   return {source,validation:'unverified-on-real-environment',lastEventAt:data?.lastEventAt??null,sequence:data?.revision??0,sessions:(data?.actors??[]).map(a=>({...a,sessionKey:a.actorId,sequence:data.revision}))};
+  },
+  async close(){closed=true;failPending();await queue;if(worker){const child=worker;worker=null;await stopOwnedChild(child);}}
  };
 }

@@ -1,4 +1,6 @@
-# P2-A.2 Live Canvas 설계 — 미구현
+# P2-A.2 Live Canvas 설계 — P2-A.1 당시 제안
+
+현재 구현·수락 검사와 설계 대비 제약은 [P2-A.2 구현 보고](P2-A.2-IMPLEMENTATION.md)를 따른다. 아래는 P2-A.1 당시 설계를 보존한 이력이다.
 
 P2-A.1 범위에서는 설계만 작성한다. App/Canvas/engine/receiver/Claude Provider의 Live 통합 코드는 변경하지 않는다. Hook 설치, sender protocol 변경, 외부 Provider/P2-B는 별도 승인 대상이다.
 

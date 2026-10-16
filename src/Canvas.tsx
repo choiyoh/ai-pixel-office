@@ -2,10 +2,11 @@ import {useEffect,useRef} from 'react';
 import type {OfficeState} from '../vendor/pixel-agents/webview-ui/src/office/engine/officeState';
 import {startGameLoop} from '../vendor/pixel-agents/webview-ui/src/office/engine/gameLoop';
 import {renderFrame} from '../vendor/pixel-agents/webview-ui/src/office/engine/renderer';
-import type {Agent} from './model';
+import type {Status} from './model';
 import {zones} from './layout';
 
-export function OfficeCanvas({office,agents,selected,zoom,onSelect,onMove}:{office:OfficeState;agents:Agent[];selected:number;zoom:number;onSelect:(id:number)=>void;onMove:(seat:string)=>void}){
+export interface CanvasActor {id:number;name:string;status:Status|'neutral'|'tool-failed';retiring?:boolean}
+export function OfficeCanvas({office,agents,selected,zoom,onSelect,onMove}:{office:OfficeState;agents:CanvasActor[];selected:number;zoom:number;onSelect:(id:number)=>void;onMove:(seat:string)=>void}){
  const ref=useRef<HTMLCanvasElement>(null);
  const projection=useRef({offsetX:0,offsetY:0,scale:1});
  const state=useRef({agents,selected,zoom});
@@ -31,7 +32,7 @@ export function OfficeCanvas({office,agents,selected,zoom,onSelect,onMove}:{offi
    office.selectedAgentId=selected;
    const visible=new Set(agents.map(a=>a.id));
    const chars=office.getCharacters().filter(c=>visible.has(c.id));
-   canvas.dataset.actors=JSON.stringify(chars.map(c=>({id:c.id,x:c.x,y:c.y,state:c.state,frame:c.frame,seat:c.seatId})));
+   canvas.dataset.actors=JSON.stringify(chars.map(c=>({id:c.id,x:c.x,y:c.y,state:c.state,frame:c.frame,seat:c.seatId,effect:c.matrixEffect,tool:c.currentTool,bubble:c.bubbleType,active:c.isActive})));
    const sceneOffsets=renderFrame(scene,buffer.width,buffer.height,office.tileMap,office.furniture,chars,2,0,0,{selectedAgentId:selected,hoveredAgentId:null,hoveredTile:null,seats:office.seats,characters:office.characters},undefined,layout.tileColors,40,28);
    const left=(canvas.width-buffer.width*fit)/2,top=(canvas.height-buffer.height*fit)/2;
    ctx.clearRect(0,0,canvas.width,canvas.height);ctx.imageSmoothingEnabled=false;
@@ -58,6 +59,7 @@ export function OfficeCanvas({office,agents,selected,zoom,onSelect,onMove}:{offi
      ctx.fillStyle='#205c50';ctx.fillText('✦ DONE',px,py-3*scale);
     }
     if(agent.status==='failed'){ctx.fillStyle='#bb3d48';ctx.fillText('⚠ ERROR',px,py-3*scale);}
+    if(agent.status==='tool-failed'){ctx.fillStyle='#e0b57c';ctx.fillText('⚠ TOOL',px,py-3*scale);}
     if(agent.status==='disconnected'){
      ctx.fillStyle='#d6dce6bb';ctx.fillRect(px-8*scale,py+5*scale,16*scale,29*scale);
      ctx.fillStyle='#454d64';ctx.fillText('OFFLINE',px,py-3*scale);
@@ -71,7 +73,7 @@ export function OfficeCanvas({office,agents,selected,zoom,onSelect,onMove}:{offi
   const r=e.currentTarget.getBoundingClientRect(),p=projection.current;
   const wx=((e.clientX-r.left)*devicePixelRatio-p.offsetX)/p.scale,wy=((e.clientY-r.top)*devicePixelRatio-p.offsetY)/p.scale;
   const hit=office.getCharacterAt(wx,wy);
-  if(hit!==null&&agents.some(a=>a.id===hit)){onSelect(hit);return;}
+   if(hit!==null&&agents.some(a=>a.id===hit&&!a.retiring)){onSelect(hit);return;}
   const seat=[...office.seats.values()].find(s=>s.seatCol===Math.floor(wx/16)&&s.seatRow===Math.floor(wy/16));
   if(seat&&!seat.assigned)onMove(seat.uid);
  }}/>;

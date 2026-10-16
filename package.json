@@ -19,6 +19,7 @@
     "doctor": "node scripts/doctor.mjs",
     "test:upstream": "node scripts/test-upstream.mjs",
     "test:connection-browser": "node scripts/connection-browser.mjs",
+    "test:live-browser": "node scripts/live-browser.mjs",
     "bootstrap": "node scripts/bootstrap.mjs",
     "test:smoke": "node scripts/smoke.mjs",
     "check:source": "node scripts/check-source.mjs"

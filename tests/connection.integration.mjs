@@ -80,7 +80,10 @@ test('synthetic authenticated hooks pass through isolated original Claude Provid
   assert.equal((await fetch(`${url}/api/hooks/claude`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(event)})).status,401);
   assert.equal((await post('deepseek',event)).status,404);
   stage='original-provider-normalization';assert.equal((await post('claude',event)).status,200);
-  for(let i=1;i<=6;i++)assert.equal((await post('claude',{session_id:`session-${i}`,hook_event_name:'PreToolUse',tool_name:'Read',tool_input:{api_key:'DO-NOT-LEAK'}})).status,200);
+  for(let i=1;i<=6;i++){
+   assert.equal((await post('claude',{session_id:`session-${i}`,hook_event_name:'SessionStart'})).status,200);
+   assert.equal((await post('claude',{session_id:`session-${i}`,hook_event_name:'PreToolUse',tool_name:'Read',tool_input:{api_key:'DO-NOT-LEAK'}})).status,200);
+  }
   await post('claude',{...event,hook_event_name:'Stop'});
   stage='snapshot-projection';let snapshot=await (await fetch(`${url}/api/events`,{headers:{cookie}})).json();
   assert.equal(snapshot.source,'fixture');assert.equal(snapshot.validation,'unverified-on-real-environment');assert.equal(snapshot.sessions.length,7);

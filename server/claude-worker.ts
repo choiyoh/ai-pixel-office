@@ -5,6 +5,7 @@ process.on('message',(message:{type?:string;requestId:number;raw:Record<string,u
  if(message.type==='orbit:shutdown'){process.disconnect?.();return;}
  try{
   const normalized=claudeProvider.normalizeHookEvent(message.raw);
-  process.send?.({requestId:message.requestId,normalized:normalized?{sessionId:normalized.sessionId,kind:normalized.event.kind,awaitingInput:'awaitingInput' in normalized.event&&normalized.event.awaitingInput===true}:null,failure:message.raw.hook_event_name==='PostToolUseFailure'});
+  const tool='toolName' in (normalized?.event??{})&&normalized?.event.kind==='toolStart'?normalized.event.toolName:undefined;
+  process.send?.({requestId:message.requestId,normalized:normalized?{sessionId:normalized.sessionId,kind:normalized.event.kind,awaitingInput:'awaitingInput' in normalized.event&&normalized.event.awaitingInput===true,tool,failure:message.raw.hook_event_name==='PostToolUseFailure'}:null});
  }catch{process.send?.({requestId:message.requestId,error:'normalization-failed'});}
 });

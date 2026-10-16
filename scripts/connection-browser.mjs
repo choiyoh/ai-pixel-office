@@ -19,7 +19,7 @@ try{
  await expect(page.getByTestId('execution-environment')).toContainText(process.platform);
  await expect(page.getByTestId('last-event')).toContainText('없음');
  await expect(page.getByText('캔버스 Mock · 연결 상태 별도 표시')).toBeVisible();
- stage='connection-event';await fetch(`http://127.0.0.1:${port}/api/hooks/claude`,{method:'POST',headers:{authorization:`Bearer ${registry.token}`,'content-type':'application/json'},body:JSON.stringify({session_id:'browser-fixture',hook_event_name:'PermissionRequest'})});
+ stage='connection-event';for(const hook_event_name of ['SessionStart','PermissionRequest'])await fetch(`http://127.0.0.1:${port}/api/hooks/claude`,{method:'POST',headers:{authorization:`Bearer ${registry.token}`,'content-type':'application/json'},body:JSON.stringify({session_id:'browser-fixture',hook_event_name})});
  await expect(page.locator('.collected-sessions')).toContainText('TEST FIXTURE',{timeout:6000});
  await expect(page.locator('.collected-sessions')).toContainText('승인 요청');
  await expect(page.getByTestId('last-event')).not.toContainText('없음');

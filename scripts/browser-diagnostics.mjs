@@ -1,5 +1,5 @@
 export function browserFailure(stage,error){
- const stages=new Set(['launch','initial-agents','status-controls','offline-freeze','filters','seat-move','seat-persistence','zoom','remove-respawn','scenario','mobile','browser-errors','connection-start','connection-load','connection-event','connection-stop']);
+ const stages=new Set(['launch','initial-agents','status-controls','offline-freeze','filters','seat-move','seat-persistence','zoom','remove-respawn','scenario','mobile','browser-errors','connection-start','connection-load','connection-event','connection-stop','live-start','live-empty','live-spawn','live-tools','live-modes','live-gap','live-evidence','live-end','live-restart','live-mobile','live-scope','live-unprepared']);
  const enums=new Set(['idle','walk','type','read','spawn','despawn','meeting-1','meeting-2']);
  const scalar=value=>typeof value==='boolean'||(typeof value==='number'&&Number.isFinite(value))||enums.has(value)?value:null;
  const matcher=error?.matcherResult;

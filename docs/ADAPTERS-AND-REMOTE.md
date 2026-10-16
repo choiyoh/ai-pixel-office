@@ -2,6 +2,8 @@
 
 ## 현재 구현과 미구현
 
+P2-A.2에서 Claude 최상위 세션의 영속 projection, Snapshot/Delta, 독립 Live Store와 Canvas 어댑터를 추가했다. 현재 계약·한계는 [구현 보고](P2-A.2-IMPLEMENTATION.md)를 우선한다. 아래 P2-A 준비 단계 설명의 메모리 전용/별도 패널 한계는 해당 구현으로 보완했으며, multi-provider·원격 접근은 여전히 미구현이다.
+
 현재 구현: 단일 Claude provider 전용 worker, 로컬 인증 intake, 민감 필드 제거 sender, 별도 read-only UI snapshot. 기존 `claudeProvider.normalizeHookEvent`를 변경 없이 호출한다. installer/team filesystem/Runtime scanners는 호출하지 않는다. 이벤트는 메모리에서 최대 100세션, IPC 대기는 최대 64개·2초 제한이다. sender는 1.5초 timeout이며 실패 시 Claude를 막지 않는다.
 
 현재 source는 서버가 결정한다. 기본 UI 캔버스는 Mock, opt-in receiver는 live transport, 통합 테스트는 fixture다. caller의 source 문자열로 이를 바꿀 수 없다. transport가 live라고 실제 Claude 실행을 암호학적으로 증명하는 것은 아니며 `realEnvironmentVerified=false` (이전 필드 realMacVerified도 false)를 유지한다. live session은 캔버스 Mock roster와 섞지 않고 별도 수집 패널에 표시한다.
