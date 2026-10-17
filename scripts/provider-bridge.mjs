@@ -10,12 +10,13 @@ try {
     throw Error("invalid-port");
   ensurePrivateDirectory(stateRoot());
   instance = await createProviderBridgeApp({
-    stateDir: path.join(stateRoot(), "provider-bridge"),
+    stateDir: path.join(stateRoot(), "provider-bridge-omp"),
     source: "live",
+    providers: ["omp"],
   });
   await instance.listen(port);
   console.log(
-    "Orbit provider bridge ready on loopback. Real Command Code/DeepSeek remains unverified.",
+    "Orbit OMP provider bridge ready on loopback. Live Office integration is separate.",
   );
 } catch {
   console.error(

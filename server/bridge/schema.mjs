@@ -26,6 +26,9 @@ const keys = [
   "nativeToolCallId",
   "startSource",
   "processOutcome",
+  "modelFamily",
+  "modelProvider",
+  "toolFailed",
 ];
 export const uuid = (v) =>
   typeof v === "string" &&
@@ -68,12 +71,29 @@ export function parseBridgeEvent(value, principal) {
     fail();
   if (!principal.roles.includes(value.actorRole))
     throw bridgeError(403, "actor-role-not-authorized");
+  if (
+    value.modelFamily !== undefined &&
+    !["deepseek", "other", "unknown"].includes(value.modelFamily)
+  )
+    fail();
+  if (
+    value.modelProvider !== undefined &&
+    !["commandcode", "deepseek", "other", "unknown"].includes(
+      value.modelProvider,
+    )
+  )
+    fail();
+  if (
+    value.toolFailed !== undefined &&
+    (value.kind !== "tool.end" || typeof value.toolFailed !== "boolean")
+  )
+    fail();
   if (value.parentTaskId === value.logicalTaskId) fail();
   if (value.kind.startsWith("tool.")) {
     if (
       !bridgeTools.includes(value.tool) ||
       typeof value.nativeToolCallId !== "string" ||
-      !/^[A-Za-z0-9_.:-]{1,160}$/.test(value.nativeToolCallId)
+      !/^[\x21-\x7E]{1,512}$/.test(value.nativeToolCallId)
     )
       fail();
   } else if (value.tool !== undefined || value.nativeToolCallId !== undefined)

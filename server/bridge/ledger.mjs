@@ -25,6 +25,7 @@ const statuses = [
   "between-tools",
   "turn-ended",
   "process-ended",
+  "tool-failed",
 ];
 const unavailable = () => bridgeError(503, "private-bridge-state-unavailable");
 export function openProviderBridge({
@@ -44,7 +45,7 @@ export function openProviderBridge({
     !["fixture", "live"].includes(source) ||
     !providers.length ||
     new Set(providers).size !== providers.length ||
-    providers.some((p) => !["claude", "command-code"].includes(p))
+    providers.some((p) => !["claude", "command-code", "omp"].includes(p))
   )
     throw bridgeError(422, "invalid-bridge-configuration");
   if (
@@ -69,7 +70,7 @@ export function openProviderBridge({
   ensurePrivateDirectory(directory);
   const file = path.join(directory, "provider-bridge.json");
   let state = {
-      version: 1,
+      version: 2,
       salt: randomBytes(32).toString("hex"),
       installations: Object.fromEntries(
         providers.map((p) => [p, randomUUID()]),
@@ -95,7 +96,7 @@ export function openProviderBridge({
         "deliveries",
         "timeline",
       ]) ||
-      s.version !== 1 ||
+      ![1, 2].includes(s.version) ||
       !hex(s.salt) ||
       !object(s.installations) ||
       Object.keys(s.installations).sort().join() !==
@@ -125,7 +126,10 @@ export function openProviderBridge({
         "receivedAt",
         "occurredAt",
         "toolKey",
+        "toolFailed",
       ]) &&
+      (e.toolFailed === undefined ||
+        (e.kind === "tool.end" && typeof e.toolFailed === "boolean")) &&
       bridgeKinds.includes(e.kind) &&
       Number.isSafeInteger(e.sequence) &&
       e.sequence >= 1 &&
@@ -171,6 +175,9 @@ export function openProviderBridge({
           "processOutcome",
           "activeTools",
           "closedTools",
+          "modelFamily",
+          "modelProvider",
+          "toolFailureObserved",
         ]) ||
         !hex(e.sessionKey) ||
         !providers.includes(e.providerId) ||
@@ -193,6 +200,15 @@ export function openProviderBridge({
         !e.closedTools.every(hex) ||
         new Set(e.closedTools).size !== e.closedTools.length ||
         e.closedTools.some((k) => k in e.activeTools) ||
+        (s.version === 1
+          ? e.modelFamily !== undefined ||
+            e.modelProvider !== undefined ||
+            e.toolFailureObserved !== undefined
+          : !["deepseek", "other", "unknown"].includes(e.modelFamily) ||
+            !["commandcode", "deepseek", "other", "unknown"].includes(
+              e.modelProvider,
+            ) ||
+            typeof e.toolFailureObserved !== "boolean") ||
         !statuses.includes(e.status) ||
         !(e.tool === null || bridgeTools.includes(e.tool)) ||
         !date(e.lastReceivedAt) ||
@@ -372,6 +388,14 @@ export function openProviderBridge({
     try {
       state = JSON.parse(fs.readFileSync(file, "utf8"));
       validate(state);
+      if (state.version === 1) {
+        state.version = 2;
+        for (const e of Object.values(state.executions)) {
+          e.modelFamily = "unknown";
+          e.modelProvider = "unknown";
+          e.toolFailureObserved = false;
+        }
+      }
     } catch {
       throw unavailable();
     }
@@ -510,7 +534,13 @@ export function openProviderBridge({
         delete e.activeTools[item.toolKey];
         e.closedTools.push(item.toolKey);
         const remaining = Object.values(e.activeTools);
-        e.status = remaining.length ? "working" : "between-tools";
+        if (item.toolFailed !== undefined)
+          e.toolFailureObserved = item.toolFailed;
+        e.status = remaining.length
+          ? "working"
+          : item.toolFailed
+            ? "tool-failed"
+            : "between-tools";
         if (remaining.length) e.tool = remaining.at(-1);
       } else if (item.kind === "turn.end") e.status = "turn-ended";
     }
@@ -622,15 +652,27 @@ export function openProviderBridge({
         processOutcome: null,
         activeTools: {},
         closedTools: [],
+        modelFamily: "unknown",
+        modelProvider: "unknown",
+        toolFailureObserved: false,
       };
       const execution = next.executions[key];
+      if (event.modelFamily !== undefined)
+        execution.modelFamily = event.modelFamily;
+      if (event.modelProvider !== undefined)
+        execution.modelProvider = event.modelProvider;
       const item = {
         kind: event.kind,
         sequence: event.sequence,
         occurredAt: event.occurredAt,
         receivedAt,
       };
-      for (const field of ["tool", "startSource", "processOutcome"])
+      for (const field of [
+        "tool",
+        "startSource",
+        "processOutcome",
+        "toolFailed",
+      ])
         if (event[field] !== undefined) item[field] = event[field];
       if (event.nativeToolCallId)
         item.toolKey = hash([key, event.nativeToolCallId]);
@@ -692,6 +734,9 @@ export function openProviderBridge({
           palette: s.palette,
           generation: s.generation,
           providerId: e.providerId,
+          modelFamily: e.modelFamily,
+          modelProvider: e.modelProvider,
+          toolFailureObserved: e.toolFailureObserved,
           logicalTaskId: e.logicalTaskId,
           delegationId: e.delegationId,
           status: e.status,
