@@ -4,27 +4,29 @@ import {spawnSync} from 'node:child_process';
 import {powershellInvocation} from './runtime.mjs';
 // Read only PID, parent PID, process birth marker and executable name. Never
 // inspect command lines, process environments, prompts or transcript files.
-export function inspectProcess(pid,{platform=process.platform}={}){
- if(!Number.isSafeInteger(pid)||pid<=1)return null;
+export function inspectProcess(pid,{platform=process.platform,timeoutMs=platform==='win32'?2500:750}={}){
+ // The sender keeps its existing deadline; explicit longer budgets are only
+ // for native diagnostic probes such as CI, not event handling.
+ if(!Number.isSafeInteger(pid)||pid<=1||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>15000)return null;
  try{
   if(platform==='linux'){
    const stat=fs.readFileSync(`/proc/${pid}/stat`,'utf8'),end=stat.lastIndexOf(')'),fields=stat.slice(end+2).split(' ');
    return {pid,parent:Number(fields[1]),birth:fields[19],name:fs.readFileSync(`/proc/${pid}/comm`,'utf8').trim()};
   }
   if(platform==='darwin'){
-   const r=spawnSync('/bin/ps',['-p',String(pid),'-o','ppid=,lstart=,ucomm='],{encoding:'utf8',timeout:750,env:{...process.env,LC_ALL:'C',TZ:'UTC'}});
+   const r=spawnSync('/bin/ps',['-p',String(pid),'-o','ppid=,lstart=,ucomm='],{encoding:'utf8',timeout:timeoutMs,env:{...process.env,LC_ALL:'C',TZ:'UTC'}});
    const m=r.status===0?r.stdout.trim().match(/^(\d+)\s+(.{24})\s+(.+)$/):null;
    return m?{pid,parent:Number(m[1]),birth:m[2],name:path.basename(m[3])}:null;
   }
-  if(platform==='win32')return queryWindows(pid)[0]??null;
+  if(platform==='win32')return queryWindows(pid,false,timeoutMs)[0]??null;
  }catch{/* Unsupported or ambiguous ancestry fails closed. */}
  return null;
 }
 // One PowerShell startup for a bounded ancestry walk, rather than one cold
 // process per shell. CIM startup on Windows runners can exceed 1.2 seconds.
-function queryWindows(pid,ancestors=false){
+function queryWindows(pid,ancestors=false,timeoutMs=2500){
  const script=`$idToRead=${pid}; $items=@(); for($depth=0;$depth -lt ${ancestors?5:1} -and $idToRead -gt 1;$depth++){ $p=Get-CimInstance Win32_Process -Filter ("ProcessId = " + $idToRead); if($null -eq $p){break}; $items+=@{pid=[int]$p.ProcessId;parent=[int]$p.ParentProcessId;birth=$p.CreationDate.ToUniversalTime().ToString('o');name=$p.Name}; $idToRead=[int]$p.ParentProcessId }; [Console]::Write((ConvertTo-Json -InputObject @($items) -Compress))`;
- const invocation=powershellInvocation(script);const r=spawnSync(invocation.command,invocation.args,{encoding:'utf8',timeout:2500,windowsHide:true});
+ const invocation=powershellInvocation(script);const r=spawnSync(invocation.command,invocation.args,{encoding:'utf8',timeout:timeoutMs,windowsHide:true});
  try{const value=r.status===0?JSON.parse(r.stdout):[];return Array.isArray(value)?value:[];}catch{return [];}
 }
 const clockTicks=()=>{const r=spawnSync('/usr/bin/getconf',['CLK_TCK'],{encoding:'utf8',timeout:500});return r.status===0?Number(r.stdout.trim()):NaN;};
