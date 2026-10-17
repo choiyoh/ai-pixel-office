@@ -32,7 +32,17 @@ const born=p=>{
  if(process.platform==='linux'){try{const boot=Number(fs.readFileSync('/proc/stat','utf8').match(/^btime (\d+)$/m)?.[1]);return boot*1000+Number(p.birth)*1000/clockTicks();}catch{return NaN;}}
  return Date.parse(process.platform==='darwin'?p.birth+' UTC':p.birth);
 };
-const claude=p=>p&&/^claude(?:\.exe)?$/i.test(p.name)&&typeof p.birth==='string'&&p.birth.length>0&&p.birth.length<=80;
+// Native auto-update installations symlink `claude` to a version-named
+// executable (e.g. 2.1.299). Accept only the installed PATH target's basename,
+// never arbitrary version-shaped process names. No executable path is sent.
+/** @param {{env?: NodeJS.ProcessEnv, resolve?: (file:string)=>string, executable?:string}} [options] */
+export function installedClaudeName({env=process.env,resolve=fs.realpathSync,executable=process.platform==='win32'?'claude.exe':'claude'}={}){
+ for(const directory of (env.PATH??'').split(path.delimiter).filter(Boolean)){
+  try{return path.basename(resolve(path.join(directory,executable)));}catch{ /* Try the next PATH entry without printing paths. */ }
+ }
+ return null;
+}
+const claude=p=>p&&(/^claude(?:\.exe)?$/i.test(p.name)||p.name===installedClaudeName())&&typeof p.birth==='string'&&p.birth.length>0&&p.birth.length<=80;
 export function findClaudeExecution({parent=process.ppid,inspect=inspectProcess}={}){
  if(process.platform==='win32'&&inspect===inspectProcess){const chain=queryWindows(parent,true);const byId=new Map(chain.map(p=>[p.pid,p]));inspect=pid=>byId.get(pid)??null;}
  for(let depth=0;depth<5&&parent>1;depth++){

@@ -14,7 +14,7 @@ P2-A.3에서는 여러 Delta를 최종 actor 상태 하나로 합쳐 toolStart/t
 
 [Claude 공식 Hook 문서](https://code.claude.com/docs/en/hooks#sessionstart)는 startup/resume/clear/compact/fork를 별도 source로 정의한다. [SessionEnd](https://code.claude.com/docs/en/hooks#sessionend)의 resume는 interactive 대화 전환을 뜻한다. source/reason만으로 실행 인스턴스나 지연 재전송을 구분할 수 없으므로, source=resume만 보고 tombstone을 지우지 않는다. 설치된 CLI는 P2-A.3에서 2.1.299였으며 실제 적용 전 버전을 다시 확인한다.
 
-승인안의 송신기 변경은 살아 있는 Claude native 프로세스의 PID/생성 표식으로 실행 인스턴스를 구분한다. 수신기가 OS에서 그 프로세스의 이름·생성 표식을 매번 재검증한다. 명령줄·환경·transcript는 조회하지 않으며 실행 식별값은 private HMAC으로만 영속화한다.
+승인안의 송신기 변경은 살아 있는 Claude native 프로세스의 PID/생성 표식으로 실행 인스턴스를 구분한다. 수신기가 OS에서 그 프로세스의 이름·생성 표식을 매번 재검증한다. 프로세스 명령줄·환경·transcript는 조회하지 않는다. Mac native 설치는 실행 파일명이 버전인 경우가 있어 로컬 PATH의 claude 심볼릭 링크 대상 파일명과만 대조하며, 그 경로는 전송·저장하지 않는다. 실행 식별값은 private HMAC으로만 영속화한다.
 
 종료된 논리 세션은 explicit resume + 새로 검증한 실행 인스턴스 + 마지막 종료 관측 이후 생성된 프로세스일 때만 generation을 증가시킨다. 기존 actorId/renderId/palette는 유지한다. UI 좌석 키는 설치 ID+actorId라 같은 선호 좌석을 사용할 수 있다. 이미 다른 캐릭터가 차지한 좌석은 빼앗지 않고 원본 엔진의 빈 좌석 선택을 따른다.
 

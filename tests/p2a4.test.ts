@@ -6,7 +6,7 @@ import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {openLiveProjection} from '../server/live-projection.mjs';
 import {parseSnapshot,parseChanges,applyChanges,applySnapshot} from '../src/live/store';
 import {LiveAnimationScheduler} from '../src/live/animation-scheduler';
-import {findClaudeExecution,verifyClaudeExecution,inspectProcess} from '../platform/claude-execution.mjs';
+import {findClaudeExecution,verifyClaudeExecution,inspectProcess,installedClaudeName} from '../platform/claude-execution.mjs';
 function fixture(){const root=fs.mkdtempSync(path.join(os.tmpdir(),'orbit-p2a4-'));let clock=Date.parse('2026-10-17T00:00:00Z');const options={directory:path.join(root,'state'),source:'fixture',environment:`${process.platform}/${process.arch}`,now:()=>new Date(clock).toISOString()};const ledger=openLiveProjection(options);return {root,ledger,options,now:()=>clock,tick:(n:number)=>{clock+=n;},clean:()=>fs.rmSync(root,{recursive:true,force:true})};}
 test('100–300ms actions between polls animate 600/750/900ms without changing ended business state',()=>{
  for(const duration of [600,750,900])for(const elapsed of [100,200,300])for(const tool of ['Read','Edit']){const f=fixture();try{const l=f.ledger;l.apply({sessionId:'one',kind:'sessionStart'});const scheduler=new LiveAnimationScheduler(duration);scheduler.observe(parseSnapshot(l.snapshot()),f.now(),true);l.apply({sessionId:'one',kind:'toolStart',tool});f.tick(elapsed);l.apply({sessionId:'one',kind:'toolEnd'});const s=parseSnapshot(l.snapshot());scheduler.observe(s,f.now(),true);assert.equal(s.actors[0].status,'between-tools');assert.equal(scheduler.visual(s.actors[0],f.now(),true),tool==='Read'?'Read':'Write');assert.equal(scheduler.visual(s.actors[0],f.now()+duration-1,true),tool==='Read'?'Read':'Write');assert.equal(scheduler.visual(s.actors[0],f.now()+duration,true),null);assert.equal(s.actors[0].status,'between-tools');}finally{f.clean();}}
@@ -52,4 +52,14 @@ test('original engine preserves default/selected seat across generations and can
  Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v)}});
  const f=fixture();try{f.ledger.apply({sessionId:'seat',kind:'sessionStart'});const a=parseSnapshot(f.ledger.snapshot()).actors[0],o=new OfficeState(createLayout());syncLiveActor(o,a,f.now(),false);const seat=o.characters.get(a.renderId).seatId;assert.equal(JSON.parse(values.get(liveSeatKey(a.installationInstanceId))!)[a.actorId],seat);o.removeAgent(a.renderId);syncLiveActor(o,{...a,generation:2},f.now(),false);assert.equal(o.characters.size,1);assert.equal(o.characters.get(a.renderId).seatId,seat);assert.notEqual(o.characters.get(a.renderId).matrixEffect,'despawn');o.removeAgent(a.renderId);o.update(1);syncLiveActor(o,{...a,generation:3},f.now(),false);assert.equal(o.characters.get(a.renderId).seatId,seat);
  }finally{f.clean();if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);else Reflect.deleteProperty(globalThis,'localStorage');}
+});
+
+
+test('native version basenames come only from the installed PATH target',()=>{
+ const expected=process.platform==='win32'?'2.1.299.exe':'2.1.299';
+ const result=installedClaudeName({env:{PATH:path.join(os.tmpdir(),'fake-cli')},resolve:()=>path.join(os.tmpdir(),'versions',expected)});
+ assert.equal(result,expected);
+ assert.equal(installedClaudeName({env:{PATH:''},resolve:()=>{throw Error('missing');}}),null);
+ const fake={pid:7,parent:1,birth:'unknown',name:'99.99.999-uninstalled'};
+ assert.equal(findClaudeExecution({parent:7,inspect:()=>fake}),null);
 });
