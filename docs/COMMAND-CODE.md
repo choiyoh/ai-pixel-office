@@ -1,23 +1,19 @@
-# Command Code / DeepSeek Adapter 준비
+# Command Code / DeepSeek Adapter 조사
 
-사용자가 제공한 공식 문서는 https://commandcode.ai/docs 이다. 2026-10-16 KST에 이 클라우드에서 문서와 llms.txt를 요청했으나 egress proxy가 403으로 차단했다. 공식 API/Hook, CLI 명령 이름·버전·이벤트 schema·DeepSeek 선택 옵션은 **확인하지 못했다**. 문서가 없다는 뜻이 아니며, 기존 Claude Code의 Analyst/Dev 위임 스크립트도 조사 명목으로 실행하거나 수정하지 않았다.
+2026-10-17 KST에 [공식 Hook 문서](https://commandcode.ai/docs/hooks), [CLI](https://commandcode.ai/docs/reference/cli), [headless](https://commandcode.ai/docs/headless), [설정 문서](https://commandcode.ai/docs/settings)를 읽었다. 이전 클라우드의 403 접근 제한은 이번 조사에서는 재현되지 않았다.
 
-Command Code는 향후 DeepSeek 실행 Adapter의 기준이다. Mock 운영 캐릭터도 Command Code로 명명했다. 과거 P1 문서의 OpenCode는 당시 범위를 보존한 이력이며 현재 DeepSeek 연동 대상으로 사용하지 않는다.
+## 확인된 외부 계약
 
-## 준비된 실행 경계
+- POSIX CLI는 `cmd`, Windows는 `cmdc`를 쓰며 `command-code`도 지원한다. Windows의 시스템 cmd.exe를 Command Code로 취급하지 않는다.
+- Hook은 SessionStart/PreToolUse/PostToolUse/Stop 네 종류다. Stop은 턴 종료이며 SessionEnd Hook은 확인된 계약에 없다.
+- 도구 식별자는 read_file/write_file/edit_file/shell_command이고 tool_use_id로 호출을 구분한다. 인자·결과·cwd·transcript는 Orbit이 전달하지 않는다.
+- SessionStart/Stop에는 matcher를 생략해야 한다. Claude의 12종 Hook 계획을 복사하지 않는다.
+- 설정 scope는 사용자 `~/.commandcode/settings.json`, 프로젝트 `.commandcode/settings.json` 및 local 파일이다. 인증 파일은 수정 대상이 아니다.
 
-`platform/launch.mjs`의 `cliInvocation`은 실행 계획만 반환하며 Command Code를 실행하지 않는다. 사용자가 검증한 executable 절대경로, args 문자열 배열, cwd 절대경로, 실행 환경(native/WSL)을 받는다. POSIX executable/Windows .exe는 shell:false 인수 배열로 계획한다. Windows .cmd/.bat는 일반 shell interpolation을 하지 않고, 확인된 Node entry 경로가 있을 때만 process.execPath로 실행할 계획을 만든다. Node entry가 없는 batch는 거부한다. Windows에서 WSL을 대신 시작하는 경로 변환은 구현하지 않았다. WSL 안에 collector와 CLI를 같이 두는 것을 기본으로 한다.
+npm public metadata에서 command-code 1.84.0, Node>=22, cmd/cmdc/command-code/commandcode alias를 확인했다. **로컬 설치 버전은 아니다.** 현재 Mac의 PATH·기존 nvm 설치·일반 앱 위치에서 CLI를 찾지 못했고, 사용자·현재 프로젝트의 Command Code 설정도 없다. `npm run doctor:command-code`가 이를 읽기 전용으로 보고한다. 전역 설치·로그인·설정 생성·위임 스크립트 변경은 하지 않았다.
 
-실제 Adapter 단계에서는 환경변수 전체를 자식에게 전달하지 않고 필요한 key allowlist, secret 주입 경계, 타임아웃·취소·exit code, stderr 민감정보 제거, 소유 프로세스만 종료하는 정책을 추가해야 한다. 현재 launcher helper를 완성된 프로세스 supervisor로 간주하지 않는다.
+## 이번 구현과 다음 경계
 
-## 연결 전에 필요한 공식 근거
+[P2-B.1 Provider Bridge](P2-B.1-PROVIDER-BRIDGE.md)는 공식 Hook의 순수 normalizer와 별도 인증·영속 수신 경계다. 아직 실제 sender/supervisor·producer spool·사용자 Hook 설치·기존 Live Office 병합은 없다. 실제 DeepSeek 모델 실행이나 기존 Haiku 위임자의 relay 여부를 이름/프롬프트로 추정하지 않는다.
 
-1. 대상 OS에서 사용 중인 CLI 실행 명령·버전·절대경로와 Windows batch/Node entry 여부를 기록한다.
-2. 공식 문서에서 실제 이벤트 수단이 확인되는지 검토한다. Hook/API가 없다면 승인된 wrapper의 시작·종료·명시적 phase만 수집하며 stdout 내용이나 prompt로 업무 상태를 추정하지 않는다.
-3. 기존 DeepSeek Analyst/Dev 위임자의 relay/실행자 관계와 변경 가능한 경계를 사용자와 검토한다. 위임 스크립트 변경은 별도 승인한다.
-4. Bridge의 인증 principal, provider namespace, eventId/sequence, task/execution/parent/delegation ID, sensitive-field allowlist가 먼저 준비되어야 한다.
-5. fake Adapter fault tests 후 각 OS에서 실제 세션을 검증한다. 공식 API 확인 이전에 Hook 명칭이나 endpoint를 발명하지 않는다.
-
-향후 envelope 제안: schemaVersion, providerId, installationInstanceId, nativeSessionId, executionId, logicalTaskId, parentTaskId?, delegationId?, eventId, sequence, occurredAt, kind, safeSummary(enum). 서버는 인증 principal과 providerId를 대조하고 수신 시각을 따로 기록한다. source/freshness는 서버가 부여한다. 아직 현재 intake에 이 envelope를 허용하지 않으며 다른 Provider 요청은 404다.
-
-멀티 Provider는 프로세스 분리 Bridge를 권장한다. 전역 watcher/parser를 공유하는 기존 Runtime에 Adapter를 직접 추가하는 방식은 상태 혼선 위험이 크다. [구현 순서](ADAPTERS-AND-REMOTE.md) 및 [P1-B 비교](P1-B-ARCHITECTURE.md)를 따른다.
+실제 연동 전에 사용 중인 머신·실행 경로·버전·DeepSeek 선택 방식과 위임 경계를 확인해야 한다. 필요한 Hook/위임 스크립트 변경은 그 시점의 실제 Diff로 별도 검토한다. 기존 Claude 수집기의 registry/settings/ledger는 그대로 유지한다.

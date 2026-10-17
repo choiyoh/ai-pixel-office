@@ -23,7 +23,9 @@
     "bootstrap": "node scripts/bootstrap.mjs",
     "test:smoke": "node scripts/smoke.mjs",
     "check:source": "node scripts/check-source.mjs",
-    "test:p2a4-browser": "node scripts/p2a4-browser.mjs"
+    "test:p2a4-browser": "node scripts/p2a4-browser.mjs",
+    "doctor:command-code": "node scripts/command-code-doctor.mjs",
+    "bridge:start": "node scripts/provider-bridge.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.2",

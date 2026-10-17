@@ -25,7 +25,8 @@ Windows PowerShell에서는 위 `npm`을 `npm.cmd`로 실행한다. 전체 설�
 - [P2-A.3 실제 Mac 검증 계획·Hook 예상 Diff](docs/P2-A.3-VALIDATION-PLAN.md)
 - [크로스플랫폼 검증 결과와 남은 작업](docs/P2-A-CROSS-PLATFORM.md)
 - [운영체제 의존성 조사](docs/CROSS-PLATFORM-AUDIT.md)
-- [Command Code 준비와 확인되지 않은 API](docs/COMMAND-CODE.md)
+- [Command Code 공식 계약·로컬 설치 조사](docs/COMMAND-CODE.md)
+- [P2-B.1 Provider Bridge 기반과 검증 범위](docs/P2-B.1-PROVIDER-BRIDGE.md)
 - [Adapter 및 사설 원격 연결 설계](docs/ADAPTERS-AND-REMOTE.md)
 
 `npm run hooks:plan`은 기존 설정을 읽고 **추가 예정 Diff와 hash만 출력**한다. apply/export 기능이 없으며 파일을 쓰지 않는다. 실제 대상 OS에서 다시 생성하고 별도 승인을 받기 전 Hook을 설치하지 않는다. 기존 사용자 설정·DeepSeek 위임 스크립트·OMP는 수정하지 않는다.
