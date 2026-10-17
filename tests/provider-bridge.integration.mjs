@@ -461,17 +461,17 @@ test("provider-bound HTTP rejects spoofing, untrusted origins, excess bodies and
   let service;
   try {
     service = await createProviderBridgeApp({
-      stateDir: root,
+      stateDir: path.join(root, "state"),
       source: "fixture",
       providers: ["claude", "command-code"],
     });
     await service.listen(0);
     const base = `http://127.0.0.1:${service.app.server.address().port}`,
       claude = JSON.parse(
-        fs.readFileSync(path.join(root, "runtime/claude.json")),
+        fs.readFileSync(path.join(root, "state/runtime/claude.json")),
       ),
       cmd = JSON.parse(
-        fs.readFileSync(path.join(root, "runtime/command-code.json")),
+        fs.readFileSync(path.join(root, "state/runtime/command-code.json")),
       ),
       event = producer({ ...cmd, roles: ["executor"] })(1, "session.start");
     const post = (provider, token, body, headers = {}) =>
@@ -553,10 +553,13 @@ test("provider-bound HTTP rejects spoofing, untrusted origins, excess bodies and
     await service.app.close();
     service = null;
     assert.equal(
-      fs.existsSync(path.join(root, "runtime/command-code.json")),
+      fs.existsSync(path.join(root, "state/runtime/command-code.json")),
       false,
     );
-    assert.equal(fs.existsSync(path.join(root, "runtime/claude.json")), false);
+    assert.equal(
+      fs.existsSync(path.join(root, "state/runtime/claude.json")),
+      false,
+    );
   } finally {
     await service?.app.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -622,14 +625,14 @@ test("separate bridge startup never overwrites an existing registry and close re
   let first, second;
   try {
     first = await createProviderBridgeApp({
-      stateDir: root,
+      stateDir: path.join(root, "state"),
       source: "fixture",
     });
     await first.listen(0);
-    const registry = path.join(root, "runtime/command-code.json"),
+    const registry = path.join(root, "state/runtime/command-code.json"),
       before = fs.readFileSync(registry);
     second = await createProviderBridgeApp({
-      stateDir: root,
+      stateDir: path.join(root, "state"),
       source: "fixture",
     });
     await assert.rejects(() => second.listen(0));
@@ -666,5 +669,35 @@ test("active actor capacity is bounded without deleting terminal identity mappin
     assert.equal(f.bridge.snapshot().terminalCount, 1);
   } finally {
     f.cleanup();
+  }
+});
+
+test("bridge refuses a public or symlinked namespace before creating a ledger", async () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), "orbit-bridge-namespace-"),
+  );
+  try {
+    if (process.platform !== "win32") {
+      const pub = path.join(root, "public");
+      fs.mkdirSync(pub, { mode: 0o755 });
+      fs.chmodSync(pub, 0o755);
+      await assert.rejects(() => createProviderBridgeApp({ stateDir: pub }));
+      assert.equal(fs.existsSync(path.join(pub, "ledger")), false);
+      assert.equal(fs.statSync(pub).mode & 0o777, 0o755);
+      const target = path.join(root, "target"),
+        link = path.join(root, "link");
+      fs.mkdirSync(target, { mode: 0o700 });
+      fs.symlinkSync(target, link, "dir");
+      await assert.rejects(() => createProviderBridgeApp({ stateDir: link }));
+      assert.equal(fs.existsSync(path.join(target, "ledger")), false);
+    } else {
+      // Exercise the new namespace ACL path on Windows without requiring symlink privilege.
+      const stateDir = path.join(root, "private"),
+        service = await createProviderBridgeApp({ stateDir });
+      assertPrivate(stateDir, { directory: true });
+      await service.app.close();
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

@@ -40,6 +40,7 @@ export async function createProviderBridgeApp({
     )
   )
     throw Error("Invalid bridge limits");
+  ensurePrivateDirectory(stateDir);
   const bridge = openProviderBridge({
     directory: path.join(stateDir, "ledger"),
     source,
@@ -60,18 +61,16 @@ export async function createProviderBridgeApp({
   );
   const owned = [];
   app.setErrorHandler((e, request, reply) => {
-    reply
-      .code(e.statusCode === 413 ? 413 : (e.statusCode ?? 503))
-      .send({
-        error:
-          e.statusCode === 413
-            ? "body-too-large"
-            : e.code?.startsWith("FST_")
-              ? "bridge-unavailable"
-              : e.statusCode
-                ? e.code
-                : "bridge-unavailable",
-      });
+    reply.code(e.statusCode === 413 ? 413 : (e.statusCode ?? 503)).send({
+      error:
+        e.statusCode === 413
+          ? "body-too-large"
+          : e.code?.startsWith("FST_")
+            ? "bridge-unavailable"
+            : e.statusCode
+              ? e.code
+              : "bridge-unavailable",
+    });
   });
   app.addHook("onRequest", async (request, reply) => {
     const host = request.headers.host;
