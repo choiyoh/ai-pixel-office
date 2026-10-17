@@ -1,3 +1,5 @@
+import {createRequire} from 'node:module';
+import {syncLiveActor,liveSeatKey} from '../src/live/engine-adapter';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
@@ -25,7 +27,7 @@ test('ambiguous resume, startup/clear/fork reuse and retired process replay neve
  }finally{f.clean();}
 });
 test('execution ancestry is bounded, denies non-Claude and rejects dead or changed process proofs',()=>{
- const self=inspectProcess(process.pid)!;const table=new Map([[9,{pid:9,parent:8,name:'sh',birth:'a'}],[8,{pid:8,parent:1,name:'claude',birth:self.birth}]]);const inspect=(pid:number)=>table.get(pid)??null;const proof=findClaudeExecution({parent:9,inspect});assert.equal(proof?.pid,8);assert.ok(verifyClaudeExecution(proof,{inspect}));assert.equal(verifyClaudeExecution({...proof,birth:'changed'},{inspect}),null);assert.equal(verifyClaudeExecution(proof,{inspect:()=>null}),null);assert.equal(findClaudeExecution({parent:9,inspect:()=>({pid:9,parent:9,name:'sh',birth:'a'})}),null);assert.equal(findClaudeExecution({parent:9,inspect:()=>({pid:9,parent:1,name:'node',birth:'a'})}),null);assert.ok(inspectProcess(process.pid));assert.equal(verifyClaudeExecution({version:1,pid:process.pid,birth:'unknown'}),null);
+ const self=inspectProcess(process.pid);assert.ok(self);const table=new Map([[9,{pid:9,parent:8,name:'sh',birth:'a'}],[8,{pid:8,parent:1,name:'claude',birth:self.birth}]]);const inspect=(pid:number)=>table.get(pid)??null;const proof=findClaudeExecution({parent:9,inspect});assert.equal(proof?.pid,8);assert.ok(verifyClaudeExecution(proof,{inspect}));assert.equal(verifyClaudeExecution({...proof,birth:'changed'},{inspect}),null);assert.equal(verifyClaudeExecution(proof,{inspect:()=>null}),null);assert.equal(findClaudeExecution({parent:9,inspect:()=>({pid:9,parent:9,name:'sh',birth:'a'})}),null);assert.equal(findClaudeExecution({parent:9,inspect:()=>({pid:9,parent:1,name:'node',birth:'a'})}),null);assert.ok(inspectProcess(process.pid));assert.equal(verifyClaudeExecution({version:1,pid:process.pid,birth:'unknown'}),null);
 });
 
 test('v1 migration preserves historical identity/terminal state and rejects failed resume evidence',()=>{
@@ -36,4 +38,18 @@ test('v1 migration preserves historical identity/terminal state and rejects fail
 test('missing/reordered deltas resync without replaying historical animations; stale deltas never overwrite generation',()=>{
  const f=fixture();try{const l=f.ledger;l.apply({sessionId:'one',kind:'sessionStart'});const before=parseSnapshot(l.snapshot());const q=new LiveAnimationScheduler();q.observe(before,f.now(),true);l.apply({sessionId:'one',kind:'toolStart',tool:'Read'});l.apply({sessionId:'one',kind:'toolEnd'});const changes=parseChanges(l.changes(before.cursor));assert.equal(applyChanges(before,{...changes,deltas:changes.deltas.slice(1)}),null);assert.equal(applyChanges(before,{...changes,deltas:[...changes.deltas].reverse()}),null);const resync=parseSnapshot(l.snapshot());q.baseline(resync);q.observe(resync,f.now(),true);assert.equal(q.visual(resync.actors[0],f.now(),true),null);assert.deepEqual(applyChanges(resync,changes),resync);const current=parseSnapshot(l.snapshot());l.apply({sessionId:'one',kind:'toolStart',tool:'Edit'});f.tick(3000);const stale=parseSnapshot(l.snapshot());q.observe(stale,f.now(),true);assert.equal(q.visual(stale.actors[0],f.now(),true),null);assert.ok(current.revision<stale.revision);
  }finally{f.clean();}
+});
+
+
+test('original engine preserves default/selected seat across generations and can resume during despawn',()=>{
+ const require=createRequire(import.meta.url);
+ const {OfficeState}=require('../vendor/pixel-agents/webview-ui/src/office/engine/officeState');
+ const {createLayout}=require('../src/layout');
+ const {buildDynamicCatalog}=require('../vendor/pixel-agents/webview-ui/src/office/layout/furnitureCatalog');
+ const {setCharacterTemplates}=require('../vendor/pixel-agents/webview-ui/src/office/sprites/spriteData');
+ const data=JSON.parse(fs.readFileSync('public/engine-assets.json','utf8'));buildDynamicCatalog(data.furniture);setCharacterTemplates(data.characters);
+ const values=new Map<string,string>(),descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v)}});
+ const f=fixture();try{f.ledger.apply({sessionId:'seat',kind:'sessionStart'});const a=parseSnapshot(f.ledger.snapshot()).actors[0],o=new OfficeState(createLayout());syncLiveActor(o,a,f.now(),false);const seat=o.characters.get(a.renderId).seatId;assert.equal(JSON.parse(values.get(liveSeatKey(a.installationInstanceId))!)[a.actorId],seat);o.removeAgent(a.renderId);syncLiveActor(o,{...a,generation:2},f.now(),false);assert.equal(o.characters.size,1);assert.equal(o.characters.get(a.renderId).seatId,seat);assert.notEqual(o.characters.get(a.renderId).matrixEffect,'despawn');o.removeAgent(a.renderId);o.update(1);syncLiveActor(o,{...a,generation:3},f.now(),false);assert.equal(o.characters.get(a.renderId).seatId,seat);
+ }finally{f.clean();if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);else Reflect.deleteProperty(globalThis,'localStorage');}
 });

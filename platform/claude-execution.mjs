@@ -16,13 +16,16 @@ export function inspectProcess(pid,{platform=process.platform}={}){
    const m=r.status===0?r.stdout.trim().match(/^(\d+)\s+(.{24})\s+(.+)$/):null;
    return m?{pid,parent:Number(m[1]),birth:m[2],name:path.basename(m[3])}:null;
   }
-  if(platform==='win32'){
-   const script=`$p=Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}'; if($null -ne $p){[Console]::Write(($p | Select-Object @{n='pid';e={[int]$_.ProcessId}},@{n='parent';e={[int]$_.ParentProcessId}},@{n='birth';e={$_.CreationDate.ToUniversalTime().ToString('o')}},@{n='name';e={$_.Name}} | ConvertTo-Json -Compress))}`;
-   const invocation=powershellInvocation(script);const r=spawnSync(invocation.command,invocation.args,{encoding:'utf8',timeout:1200,windowsHide:true});
-   return r.status===0&&r.stdout.trim()?JSON.parse(r.stdout):null;
-  }
+  if(platform==='win32')return queryWindows(pid)[0]??null;
  }catch{/* Unsupported or ambiguous ancestry fails closed. */}
  return null;
+}
+// One PowerShell startup for a bounded ancestry walk, rather than one cold
+// process per shell. CIM startup on Windows runners can exceed 1.2 seconds.
+function queryWindows(pid,ancestors=false){
+ const script=`$idToRead=${pid}; $items=@(); for($depth=0;$depth -lt ${ancestors?5:1} -and $idToRead -gt 1;$depth++){ $p=Get-CimInstance Win32_Process -Filter ("ProcessId = " + $idToRead); if($null -eq $p){break}; $items+=@{pid=[int]$p.ProcessId;parent=[int]$p.ParentProcessId;birth=$p.CreationDate.ToUniversalTime().ToString('o');name=$p.Name}; $idToRead=[int]$p.ParentProcessId }; [Console]::Write((ConvertTo-Json -InputObject @($items) -Compress))`;
+ const invocation=powershellInvocation(script);const r=spawnSync(invocation.command,invocation.args,{encoding:'utf8',timeout:2500,windowsHide:true});
+ try{const value=r.status===0?JSON.parse(r.stdout):[];return Array.isArray(value)?value:[];}catch{return [];}
 }
 const clockTicks=()=>{const r=spawnSync('/usr/bin/getconf',['CLK_TCK'],{encoding:'utf8',timeout:500});return r.status===0?Number(r.stdout.trim()):NaN;};
 const born=p=>{
@@ -31,6 +34,7 @@ const born=p=>{
 };
 const claude=p=>p&&/^claude(?:\.exe)?$/i.test(p.name)&&typeof p.birth==='string'&&p.birth.length>0&&p.birth.length<=80;
 export function findClaudeExecution({parent=process.ppid,inspect=inspectProcess}={}){
+ if(process.platform==='win32'&&inspect===inspectProcess){const chain=queryWindows(parent,true);const byId=new Map(chain.map(p=>[p.pid,p]));inspect=pid=>byId.get(pid)??null;}
  for(let depth=0;depth<5&&parent>1;depth++){
   const p=inspect(parent);if(!p)return null;
   if(claude(p))return {version:1,pid:p.pid,birth:p.birth};

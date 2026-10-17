@@ -10,6 +10,8 @@ export function syncLiveActor(office:OfficeState,actor:LiveActor,now:number,offl
   let seat:string|undefined;
   try{const saved=JSON.parse(localStorage.getItem(liveSeatKey(actor.installationInstanceId))??'{}');if(typeof saved[actor.actorId]==='string')seat=saved[actor.actorId];}catch{ /* ignore malformed view preferences */ }
   office.addAgent(id,actor.palette,0,seat,false);
+  const assigned=office.characters.get(id)?.seatId;
+  if(assigned)try{const key=liveSeatKey(actor.installationInstanceId),saved=JSON.parse(localStorage.getItem(key)??'{}');saved[actor.actorId]=assigned;localStorage.setItem(key,JSON.stringify(saved));}catch{ /* View preferences never block event observation. */ }
  }
  const ch=office.characters.get(id)!;
  const fresh=freshness(actor,now,offline)==='fresh';
