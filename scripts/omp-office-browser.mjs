@@ -149,6 +149,15 @@ try {
   await expect(page.getByTestId("live-count")).toHaveText("1");
   await expect.poll(async () => (await actors())[0]?.seat).toBe("meeting-2");
   result.channelSeatsPreserved = true;
+  stage = "mode-return";
+  await page.getByRole('button',{name:'MOCK SANDBOX',exact:true}).click();
+  await emit({type:'tool_execution_start',toolName:'read',toolCallId:'PRIVATE-CALL|mode'});
+  await emit({type:'tool_execution_end',toolName:'read',toolCallId:'PRIVATE-CALL|mode',isError:false});
+  await page.getByRole('button',{name:'LIVE OFFICE',exact:true}).click();
+  await page.waitForResponse(r=>r.url().endsWith('/api/omp/snapshot'));
+  await expect(page.getByTestId('live-working')).toHaveText('0');
+  expect((await actors())[0]?.tool).toBe(null);
+  result.modeReturnSkippedOldAnimation=true;
   stage = "outage";
   await page.route("**/api/omp/snapshot", (route) =>
     route.fulfill({
@@ -178,8 +187,10 @@ try {
   expect((await actors())[0]?.tool).toBe(null);
   result.recoverySkippedOldAnimation = true;
   stage = "bridge-restart";
+  await page.getByRole('button',{name:'MOCK SANDBOX',exact:true}).click();
   await bridge.app.close();
   bridge = null;
+  await page.getByRole('button',{name:'LIVE OFFICE',exact:true}).click();
   await expect(page.getByTestId("live-connection")).toContainText("연결 끊김");
   await expect(page.getByTestId("live-count")).toHaveText("1");
   await startBridge();

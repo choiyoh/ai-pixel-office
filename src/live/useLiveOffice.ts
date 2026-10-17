@@ -1,10 +1,11 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {applyChanges,applySnapshot,parseChanges,parseSnapshot,type LiveSnapshot} from './store';
 export function useLiveOffice(active:boolean,channel:'claude'|'omp'='claude'){
+ const resyncRevision=useRef(0),savedSnapshot=useRef<LiveSnapshot|null>(null);
  const [view,setView]=useState<{snapshot:LiveSnapshot|null;connection:'checking'|'ready'|'offline'|'unprepared';resync:number}>({snapshot:null,connection:'checking',resync:0});
  useEffect(()=>{
   if(!active)return;
-  let disposed=false,timer:ReturnType<typeof setTimeout>,current:LiveSnapshot|null=null,lastKnown:LiveSnapshot|null=null,resync=0,recovering=false;
+  let disposed=false,timer:ReturnType<typeof setTimeout>,current:LiveSnapshot|null=null,lastKnown:LiveSnapshot|null=channel==='omp'?savedSnapshot.current:null,resync=resyncRevision.current,recovering=false;
   const controller=new AbortController();
   const read=async(url:string)=>{
    const response=await fetch(url,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(6000)]),cache:'no-store'});
@@ -16,16 +17,16 @@ export function useLiveOffice(active:boolean,channel:'claude'|'omp'='claude'){
     if(channel==='omp'){
      const raw=await read('/api/omp/snapshot');if(disposed)return;if(raw===null){current=null;recovering=true;return;}
      const next=parseSnapshot(raw);if(next.providerId!=='omp'||next.actors.some(a=>a.providerId!=='omp'))throw Error('Invalid OMP channel');
-     if(!current||recovering||current.epoch!==next.epoch)resync++;
-     current=applySnapshot(current,next);recovering=false;
-     lastKnown=current;setView({snapshot:current,connection:'ready',resync});return;
+     if(!current||recovering||current.epoch!==next.epoch)resync=++resyncRevision.current;
+     current=applySnapshot(current??lastKnown,next);recovering=false;
+     lastKnown=current;savedSnapshot.current=current;setView({snapshot:current,connection:'ready',resync});return;
     }
     if(current){
      const raw=await read(`/api/live/events?after=${encodeURIComponent(current.cursor)}`);if(disposed)return;
      if(raw===null){current=null;return;}
      current=applyChanges(current,parseChanges(raw));
     }
-    if(!current){resync++;const raw=await read('/api/live/snapshot');if(disposed)return;if(raw===null)return;current=applySnapshot(lastKnown,parseSnapshot(raw));}
+    if(!current){resync=++resyncRevision.current;const raw=await read('/api/live/snapshot');if(disposed)return;if(raw===null)return;current=applySnapshot(lastKnown,parseSnapshot(raw));}
     if(!disposed){lastKnown=current;setView({snapshot:current,connection:'ready',resync});}
    }catch{recovering=true;if(!disposed)setView(previous=>({...previous,connection:'offline'}));}
    finally{if(!disposed)timer=setTimeout(()=>void refresh(),1000);}

@@ -16,7 +16,7 @@
 
 ## Polling과 애니메이션
 
-OMP는1초 간격으로 bounded snapshot/timeline을 조회한다. 같은 Polling 사이의 tool.start/end도 timeline에서 관찰해750ms 동안 시각 동작을 재생한다. 실제 상태와 실행 중 수치는 tool.end 즉시 종료 상태다. 종료된 actor의 과거 동작은 재생하지 않는다. 최초 로드·채널 전환·재연결은 baseline만 취해 과거 연출을 반복하지 않는다. 이전 revision snapshot은 덮어쓰지 않는다.
+OMP는1초 간격으로 bounded snapshot/timeline을 조회한다. 같은 Polling 사이의 tool.start/end도 timeline에서 관찰해750ms 동안 시각 동작을 재생한다. 실제 상태와 실행 중 수치는 tool.end 즉시 종료 상태다. 종료된 actor의 과거 동작은 재생하지 않는다. 최초 로드·채널 전환·Mock에서 복귀·재연결은 baseline만 취해 과거 연출을 반복하지 않는다. 이전 revision snapshot은 덮어쓰지 않는다.
 
 처음 Bridge가 없으면 연결 준비 상태다. 한 번 관찰한 뒤 Bridge 중단/HTTP 실패/registry 제거는 마지막 snapshot을 offline으로 유지하고 엔진 동작을 멈춘다. 연결 실패를 SessionEnd로 처리하지 않는다. Bridge 재시작 후 같은 installation/actor 신원·좌석을 유지한다. 실제 execution.end만 actor를 제거한다. failure/approval/waiting/unknown은 시각 동작보다 우선한다.
 
