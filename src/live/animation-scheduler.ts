@@ -19,10 +19,10 @@ export class LiveAnimationScheduler {
   if(!enabled){this.suspend();return;}
   if(this.paused){this.paused=false;this.clear();return;}
   const actors=new Map(snapshot.actors.map(a=>[a.actorId,a]));
-  for(const [id,p] of this.pending){const a=actors.get(id);if(!a||a.generation!==p.generation||freshness(a,now)!=='fresh')this.pending.delete(id);}
+  for(const [id,p] of this.pending){const a=actors.get(id);if(!a||a.generation!==p.generation||freshness(a,now)!=='fresh'||['approval','waiting-input','tool-failed','unknown'].includes(a.status))this.pending.delete(id);}
   for(const e of events){
    const a=actors.get(e.actorId);
-   if(!a||e.generation!==a.generation||freshness(a,now)!=='fresh'||now-Date.parse(e.at)>2500)continue;
+   if(!a||e.generation!==a.generation||freshness(a,now)!=='fresh'||['approval','waiting-input','tool-failed','unknown'].includes(a.status)||now-Date.parse(e.at)>2500)continue;
    this.event(e,a,now);
   }
  }
