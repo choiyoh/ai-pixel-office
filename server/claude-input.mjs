@@ -12,8 +12,13 @@ export function sanitizeClaude(raw){
  const result={session_id:raw.session_id,hook_event_name:raw.hook_event_name};
  if(raw.tool_name!==undefined)result.tool_name=tools.has(raw.tool_name)?raw.tool_name:'Other';
  if(['idle_prompt','permission_prompt'].includes(raw.notification_type))result.notification_type=raw.notification_type;
- if(['startup','resume','clear','compact'].includes(raw.source))result.source=raw.source;
- if(['exit','clear','resume','logout','other'].includes(raw.reason))result.reason=raw.reason;
+ if(['startup','resume','clear','compact','fork'].includes(raw.source))result.source=raw.source;
+ if(['exit','clear','resume','logout','other','prompt_input_exit'].includes(raw.reason))result.reason=raw.reason;
  if(raw.hook_event_name==='SubagentStart')result.agent_type='subagent';
+ if(raw.orbit_execution!==undefined){
+  const p=raw.orbit_execution;
+  if(!p||p.version!==1||!Number.isSafeInteger(p.pid)||p.pid<=1||typeof p.birth!=='string'||p.birth.length<1||p.birth.length>80||!/^[A-Za-z0-9 .:+-]+$/.test(p.birth)||Object.keys(p).some(k=>!['version','pid','birth'].includes(k)))throw Error('invalid execution');
+  result.orbit_execution={version:1,pid:p.pid,birth:p.birth};
+ }
  return result;
 }

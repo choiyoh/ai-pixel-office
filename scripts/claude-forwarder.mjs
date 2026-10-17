@@ -3,6 +3,7 @@ import path from 'node:path';
 import {stateRoot} from '../platform/runtime.mjs';
 import {assertPrivate} from '../platform/private-files.mjs';
 import http from 'node:http';
+import {findClaudeExecution} from '../platform/claude-execution.mjs';
 import {sanitizeClaude} from '../server/claude-input.mjs';
 // Invoked only by a separately approved settings entry. No installer here.
 // Never log stdin/credentials or allow a hook failure to break Claude Code.
@@ -17,6 +18,10 @@ try{
  if(!Number.isInteger(registry.port)||registry.port<1||registry.port>65535||typeof registry.token!=='string'||!/^[a-f0-9]{64}$/.test(registry.token))throw Error('bad registry');
  if(!Number.isInteger(registry.pid)||registry.pid<=0)throw Error('bad registry owner');
  process.kill(registry.pid,0); // Best-effort stale-process check; never kill it.
+ const execution=findClaudeExecution();
+ // Legacy events still work; terminal identities only reopen with a verified
+ // new Claude process instance and explicit SessionStart source=resume.
+ if(execution)event.orbit_execution=execution;
  const body=JSON.stringify(event);
  await new Promise(resolve=>{
   const request=http.request({host:'127.0.0.1',port:registry.port,path:'/api/hooks/claude',method:'POST',headers:{authorization:`Bearer ${registry.token}`,'content-type':'application/json','content-length':Buffer.byteLength(body)},timeout:1500},response=>{response.resume();response.on('end',resolve);});

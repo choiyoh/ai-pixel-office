@@ -3,6 +3,7 @@ import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {stopOwnedChild} from '../platform/runtime.mjs';
 import {sanitizeClaude} from './claude-input.mjs';
+import {verifyClaudeExecution} from '../platform/claude-execution.mjs';
 import {openLiveProjection} from './live-projection.mjs';
 export function makeReceiver({source='live',maxSessions=100}={}){
  const token=randomBytes(32).toString('hex');
@@ -37,7 +38,9 @@ export function makeReceiver({source='live',maxSessions=100}={}){
     });
     if(!normalized.normalized)return {accepted:false,reason:'ignored-by-provider'};
     if(closed)throw Error('receiver closed');
-    return projection.apply(normalized.normalized);
+    const executionId=raw.orbit_execution?verifyClaudeExecution(raw.orbit_execution):null;
+    if(raw.orbit_execution&&!executionId)return {accepted:false,reason:'execution-not-live'};
+    return projection.apply({...normalized.normalized,executionId:executionId?.id,executionStartedAt:executionId?.startedAt,startSource:raw.source,endReason:raw.reason});
    });
    queue=operation.catch(()=>{});
    try{return await operation;}finally{queued--;}

@@ -4,9 +4,9 @@ export const liveKinds=['sessionStart','sessionEnd','toolStart','toolEnd','permi
 export const liveTools=['Read','Grep','Glob','Edit','Write','Bash','WebFetch','WebSearch','Agent','Task','AskUserQuestion','Other'] as const;
 export type LiveTool=typeof liveTools[number];
 export type LiveSource='live'|'fixture';
-export interface LiveActor {actorId:string;renderId:number;palette:number;generation:1;providerId:'claude';installationInstanceId:string;source:LiveSource;environment:string;name:string;status:LiveStatus;kind:typeof liveKinds[number];lastTool:LiveTool|null;observedAt:string;lastEventAt:string;restored:boolean}
-export interface LiveEvent {revision:number;actorId:string;kind:typeof liveKinds[number];status:LiveStatus|'session-ended';at:string}
-export interface Tombstone {actorId:string|null;endedAt:string}
+export interface LiveActor {actorId:string;renderId:number;palette:number;generation:number;providerId:'claude';installationInstanceId:string;source:LiveSource;environment:string;name:string;status:LiveStatus;kind:typeof liveKinds[number];lastTool:LiveTool|null;observedAt:string;lastEventAt:string;restored:boolean}
+export interface LiveEvent {revision:number;actorId:string;kind:typeof liveKinds[number];status:LiveStatus|'session-ended';at:string;generation?:number;tool?:LiveTool|null}
+export interface Tombstone {actorId:string|null;generation?:number;endedAt:string}
 export interface LiveSnapshot {ready:true;epoch:string;revision:number;cursor:string;source:LiveSource;installationInstanceId:string;receivedAt:string;lastEventAt:string|null;actors:LiveActor[];tombstones:Tombstone[];timeline:LiveEvent[]}
 export interface LiveDelta {revision:number;upsert:LiveActor|null;tombstone:Tombstone|null;event:LiveEvent|null}
 export interface LiveChanges {ready:true;epoch:string;revision:number;cursor:string;source:LiveSource;receivedAt:string;resetRequired:boolean;deltas:LiveDelta[]}
@@ -16,9 +16,9 @@ const object=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='obje
 const integer=(v:unknown):v is number=>Number.isSafeInteger(v)&&Number(v)>=0;
 const member=<T extends string>(set:readonly T[],v:unknown):v is T=>typeof v==='string'&&set.includes(v as T);
 const source=(v:unknown):v is LiveSource=>v==='live'||v==='fixture';
-function actor(v:unknown):v is LiveActor{return object(v)&&uuid(v.actorId)&&integer(v.renderId)&&v.renderId>0&&integer(v.palette)&&v.palette<6&&v.generation===1&&v.providerId==='claude'&&uuid(v.installationInstanceId)&&source(v.source)&&member(liveStatuses,v.status)&&member(liveKinds,v.kind)&&(v.lastTool===null||member(liveTools,v.lastTool))&&timestamp(v.observedAt)&&timestamp(v.lastEventAt)&&typeof v.restored==='boolean'&&typeof v.environment==='string'&&/^(linux|darwin|win32)\/(x64|arm64)( · WSL)?$/.test(v.environment)&&v.name===`Claude · ${String(v.renderId).padStart(3,'0')}`;}
-const tomb=(v:unknown):v is Tombstone=>object(v)&&(v.actorId===null||uuid(v.actorId))&&timestamp(v.endedAt);
-const event=(v:unknown):v is LiveEvent=>object(v)&&integer(v.revision)&&v.revision>0&&uuid(v.actorId)&&member(liveKinds,v.kind)&&(v.status==='session-ended'||member(liveStatuses,v.status))&&timestamp(v.at);
+function actor(v:unknown):v is LiveActor{return object(v)&&uuid(v.actorId)&&integer(v.renderId)&&v.renderId>0&&integer(v.palette)&&v.palette<6&&integer(v.generation)&&v.generation>0&&v.providerId==='claude'&&uuid(v.installationInstanceId)&&source(v.source)&&member(liveStatuses,v.status)&&member(liveKinds,v.kind)&&(v.lastTool===null||member(liveTools,v.lastTool))&&timestamp(v.observedAt)&&timestamp(v.lastEventAt)&&typeof v.restored==='boolean'&&typeof v.environment==='string'&&/^(linux|darwin|win32)\/(x64|arm64)( · WSL)?$/.test(v.environment)&&v.name===`Claude · ${String(v.renderId).padStart(3,'0')}`;}
+const tomb=(v:unknown):v is Tombstone=>object(v)&&(v.actorId===null||uuid(v.actorId))&&timestamp(v.endedAt)&&(v.generation===undefined||(integer(v.generation)&&v.generation>0));
+const event=(v:unknown):v is LiveEvent=>object(v)&&integer(v.revision)&&v.revision>0&&uuid(v.actorId)&&member(liveKinds,v.kind)&&(v.status==='session-ended'||member(liveStatuses,v.status))&&timestamp(v.at)&&(v.generation===undefined||(integer(v.generation)&&v.generation>0))&&(v.tool===undefined||v.tool===null||member(liveTools,v.tool));
 const envelope=(v:unknown):v is Record<string,unknown>=>object(v)&&v.ready===true&&uuid(v.epoch)&&integer(v.revision)&&v.cursor===`${v.epoch}:${v.revision}`&&source(v.source)&&timestamp(v.receivedAt);
 export function parseSnapshot(v:unknown):LiveSnapshot{
  if(!envelope(v)||!uuid(v.installationInstanceId)||!(v.lastEventAt===null||timestamp(v.lastEventAt))||!Array.isArray(v.actors)||v.actors.length>100||!v.actors.every(actor)||!Array.isArray(v.tombstones)||v.tombstones.length>1000||!v.tombstones.every(tomb)||!Array.isArray(v.timeline)||v.timeline.length>100||!v.timeline.every(event))throw Error('Invalid live snapshot');
@@ -33,8 +33,8 @@ export function parseChanges(v:unknown):LiveChanges{
 export function applySnapshot(previous:LiveSnapshot|null,next:LiveSnapshot):LiveSnapshot{
  if(previous?.epoch===next.epoch&&next.revision<previous.revision)return previous;
  const tombstones=previous?.epoch===next.epoch?[...previous.tombstones,...next.tombstones]:next.tombstones;
- const ended=new Set(tombstones.map(t=>t.actorId));
- return {...next,tombstones:[...new Map(tombstones.map(t=>[t.actorId??t.endedAt,t])).values()],actors:next.actors.filter(a=>!ended.has(a.actorId))};
+ const ended=new Map<string|null,number>();for(const t of tombstones)ended.set(t.actorId,Math.max(ended.get(t.actorId)??0,t.generation??1));
+ return {...next,tombstones:[...new Map(tombstones.map(t=>[`${t.actorId??t.endedAt}:${t.generation??1}`,t])).values()],actors:next.actors.filter(a=>a.generation>(ended.get(a.actorId)??0))};
 }
 export function applyChanges(current:LiveSnapshot,response:LiveChanges):LiveSnapshot|null{
  if(response.resetRequired||response.epoch!==current.epoch||response.source!==current.source)return null;
@@ -44,10 +44,10 @@ export function applyChanges(current:LiveSnapshot,response:LiveChanges):LiveSnap
  for(const d of changes){if(d.revision!==revision+1)return null;revision=d.revision;}
  if(revision!==response.revision)return null;
  const actors=new Map(current.actors.map(a=>[a.actorId,a])),tombstones=[...current.tombstones],timeline=[...current.timeline];
- const ended=new Set(tombstones.map(t=>t.actorId));
+ const ended=new Map<string|null,number>();for(const t of tombstones)ended.set(t.actorId,Math.max(ended.get(t.actorId)??0,t.generation??1));
  for(const d of changes){
-  if(d.tombstone){tombstones.push(d.tombstone);ended.add(d.tombstone.actorId);if(d.tombstone.actorId)actors.delete(d.tombstone.actorId);}
-  if(d.upsert&&!ended.has(d.upsert.actorId)){
+  if(d.tombstone){tombstones.push(d.tombstone);ended.set(d.tombstone.actorId,Math.max(ended.get(d.tombstone.actorId)??0,d.tombstone.generation??1));if(d.tombstone.actorId&&(actors.get(d.tombstone.actorId)?.generation??0)<=(d.tombstone.generation??1))actors.delete(d.tombstone.actorId);}
+  if(d.upsert&&d.upsert.generation>(ended.get(d.upsert.actorId)??0)&&(actors.get(d.upsert.actorId)?.generation??0)<=d.upsert.generation){
    if(d.upsert.source!==current.source||d.upsert.installationInstanceId!==current.installationInstanceId||[...actors.values()].some(a=>a.actorId!==d.upsert!.actorId&&a.renderId===d.upsert!.renderId))return null;
    actors.set(d.upsert.actorId,d.upsert);
   }

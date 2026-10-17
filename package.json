@@ -22,7 +22,8 @@
     "test:live-browser": "node scripts/live-browser.mjs",
     "bootstrap": "node scripts/bootstrap.mjs",
     "test:smoke": "node scripts/smoke.mjs",
-    "check:source": "node scripts/check-source.mjs"
+    "check:source": "node scripts/check-source.mjs",
+    "test:p2a4-browser": "node scripts/p2a4-browser.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.2",

@@ -1,0 +1,77 @@
+diff --git a/scripts/claude-forwarder.mjs b/scripts/claude-forwarder.mjs
+index b823f3b..b21c8bd 100644
+--- a/scripts/claude-forwarder.mjs
++++ b/scripts/claude-forwarder.mjs
+@@ -3,6 +3,7 @@ import path from 'node:path';
+ import {stateRoot} from '../platform/runtime.mjs';
+ import {assertPrivate} from '../platform/private-files.mjs';
+ import http from 'node:http';
++import {findClaudeExecution} from '../platform/claude-execution.mjs';
+ import {sanitizeClaude} from '../server/claude-input.mjs';
+ // Invoked only by a separately approved settings entry. No installer here.
+ // Never log stdin/credentials or allow a hook failure to break Claude Code.
+@@ -17,6 +18,10 @@ try{
+  if(!Number.isInteger(registry.port)||registry.port<1||registry.port>65535||typeof registry.token!=='string'||!/^[a-f0-9]{64}$/.test(registry.token))throw Error('bad registry');
+  if(!Number.isInteger(registry.pid)||registry.pid<=0)throw Error('bad registry owner');
+  process.kill(registry.pid,0); // Best-effort stale-process check; never kill it.
++ const execution=findClaudeExecution();
++ // Legacy events still work; terminal identities only reopen with a verified
++ // new Claude process instance and explicit SessionStart source=resume.
++ if(execution)event.orbit_execution=execution;
+  const body=JSON.stringify(event);
+  await new Promise(resolve=>{
+   const request=http.request({host:'127.0.0.1',port:registry.port,path:'/api/hooks/claude',method:'POST',headers:{authorization:`Bearer ${registry.token}`,'content-type':'application/json','content-length':Buffer.byteLength(body)},timeout:1500},response=>{response.resume();response.on('end',resolve);});
+diff --git a/platform/claude-execution.mjs b/platform/claude-execution.mjs
+new file mode 100644
+index 0000000..79943e1
+--- /dev/null
++++ b/platform/claude-execution.mjs
+@@ -0,0 +1,48 @@
++import fs from 'node:fs';
++import path from 'node:path';
++import {spawnSync} from 'node:child_process';
++import {powershellInvocation} from './runtime.mjs';
++// Read only PID, parent PID, process birth marker and executable name. Never
++// inspect command lines, process environments, prompts or transcript files.
++export function inspectProcess(pid,{platform=process.platform}={}){
++ if(!Number.isSafeInteger(pid)||pid<=1)return null;
++ try{
++  if(platform==='linux'){
++   const stat=fs.readFileSync(`/proc/${pid}/stat`,'utf8'),end=stat.lastIndexOf(')'),fields=stat.slice(end+2).split(' ');
++   return {pid,parent:Number(fields[1]),birth:fields[19],name:fs.readFileSync(`/proc/${pid}/comm`,'utf8').trim()};
++  }
++  if(platform==='darwin'){
++   const r=spawnSync('/bin/ps',['-p',String(pid),'-o','ppid=,lstart=,ucomm='],{encoding:'utf8',timeout:750,env:{...process.env,LC_ALL:'C',TZ:'UTC'}});
++   const m=r.status===0?r.stdout.trim().match(/^(\d+)\s+(.{24})\s+(.+)$/):null;
++   return m?{pid,parent:Number(m[1]),birth:m[2],name:path.basename(m[3])}:null;
++  }
++  if(platform==='win32'){
++   const script=`$p=Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}'; if($null -ne $p){[Console]::Write(($p | Select-Object @{n='pid';e={[int]$_.ProcessId}},@{n='parent';e={[int]$_.ParentProcessId}},@{n='birth';e={$_.CreationDate.ToUniversalTime().ToString('o')}},@{n='name';e={$_.Name}} | ConvertTo-Json -Compress))}`;
++   const invocation=powershellInvocation(script);const r=spawnSync(invocation.command,invocation.args,{encoding:'utf8',timeout:1200,windowsHide:true});
++   return r.status===0&&r.stdout.trim()?JSON.parse(r.stdout):null;
++  }
++ }catch{/* Unsupported or ambiguous ancestry fails closed. */}
++ return null;
++}
++const clockTicks=()=>{const r=spawnSync('/usr/bin/getconf',['CLK_TCK'],{encoding:'utf8',timeout:500});return r.status===0?Number(r.stdout.trim()):NaN;};
++const born=p=>{
++ if(process.platform==='linux'){try{const boot=Number(fs.readFileSync('/proc/stat','utf8').match(/^btime (\d+)$/m)?.[1]);return boot*1000+Number(p.birth)*1000/clockTicks();}catch{return NaN;}}
++ return Date.parse(process.platform==='darwin'?p.birth+' UTC':p.birth);
++};
++const claude=p=>p&&/^claude(?:\.exe)?$/i.test(p.name)&&typeof p.birth==='string'&&p.birth.length>0&&p.birth.length<=80;
++export function findClaudeExecution({parent=process.ppid,inspect=inspectProcess}={}){
++ for(let depth=0;depth<5&&parent>1;depth++){
++  const p=inspect(parent);if(!p)return null;
++  if(claude(p))return {version:1,pid:p.pid,birth:p.birth};
++  if(!/^(?:ba|z|da)?sh(?:\.exe)?$|^cmd\.exe$|^powershell\.exe$|^pwsh\.exe$/i.test(p.name))return null;
++  parent=p.parent;
++ }
++ return null;
++}
++export function verifyClaudeExecution(proof,{inspect=inspectProcess}={}){
++ if(!proof||proof.version!==1||!Number.isSafeInteger(proof.pid)||proof.pid<=1||typeof proof.birth!=='string'||proof.birth.length>80)return null;
++ const p=inspect(proof.pid);
++ if(!claude(p)||p.birth!==proof.birth)return null;
++ const startedAt=born(p);
++ return Number.isFinite(startedAt)?{id:JSON.stringify([process.platform,proof.pid,proof.birth]),startedAt}:null;
++}
