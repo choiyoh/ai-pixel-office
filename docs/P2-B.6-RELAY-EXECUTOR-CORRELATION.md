@@ -84,8 +84,9 @@ Bridge(4183)·웹(4173)을 새 코드로 재시작한 뒤 **실제 위임 3회**
 1. `claude -p "Use the omp-deepseek subagent through the Task tool to delegate this to OMP: <작업>" --allowedTools Task Bash`
    - `--allowedTools "Task"`만 주면 subagent의 Bash가 거부되어 OMP가 실행되지 않는다.
      Task와 Bash를 **함께** 허용해야 한다.
-   - `claude --agent omp-deepseek -p …` 경로는 이 환경에서 OMP 호출을 만들지 못했다(2회 시도).
-     Task 위임 경로를 쓴다.
+   - `claude --agent omp-deepseek -p …` 경로도 OMP 호출에 성공한 사례가 있다(실행 4, 16초).
+     다만 같은 방식의 재시도 1회는 10분간 OMP를 호출하지 못하고 표류했다. Task 위임 경로가
+     3/3 성공으로 더 일관적이므로 실증·자동화에는 Task 경로를 쓴다.
 2. OMP 실행은 위임 시작 후 수십 초 안에 나타난다. actor는 live일 때만 목록에 남으므로
    표시를 확인하려면 **실행 중에** 조회해야 한다(폴링). 짧은 실행은 시작·종료만 timeline에 남는다.
 
