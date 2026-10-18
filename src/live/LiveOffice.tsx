@@ -7,10 +7,24 @@ import {officeTimezone} from '../model';
 import {LiveAnimationScheduler} from './animation-scheduler';
 import {useLiveOffice} from './useLiveOffice';
 import {canvasLiveActor,liveSeatKey,syncLiveActor} from './engine-adapter';
-import {freshness,liveLabels,type LiveActor} from './store';
+import {freshness,liveLabels,type LiveActor,type OmpOutboxStatus} from './store';
+import {useOmpOutbox} from './useOmpOutbox';
 const time=(at:string|null|undefined)=>at?new Date(at).toLocaleTimeString('ko-KR',{hour12:false,timeZone:officeTimezone}):'없음';
+const outboxLabel=(o:OmpOutboxStatus|null)=>{
+ if(!o)return '송신 큐 확인 중';
+ if(!o.prepared)return '송신 큐 미준비';
+ const parts=[`송신 큐 대기 ${o.pending}`,`예약 여유 ${o.capacityRemaining}`];
+ if(o.blockedRuns)parts.push(`확인 필요 ${o.blockedRuns}`);
+ if(o.installationMismatch)parts.push('설치 신원 불일치 · 원본 보존');
+ if(o.registry==='stale')parts.push('수신 서버 중단');
+ if(o.registry==='missing')parts.push('수신 서버 미등록');
+ if(o.lastRejection)parts.push(`마지막 거부 HTTP ${o.lastRejection.statusCode}`);
+ if(o.recoveryRequired)parts.push('복구 필요 · npm run omp:replay');
+ return parts.join(' · ');
+};
 export function LiveOffice({active,onMode,channel='claude',onChannel}:{active:boolean;onMode:(mode:'mock'|'live')=>void;channel?:'claude'|'omp';onChannel?:(channel:'claude'|'omp')=>void}){
  const {snapshot,connection,resync}=useLiveOffice(active,channel);
+ const outbox=useOmpOutbox(active,channel);
  const [office,setOffice]=useState<OfficeState|null>(null),[error,setError]=useState(false),[selected,setSelected]=useState(0),[zoom,setZoom]=useState(1),[now,setNow]=useState(Date.now()),[filter,setFilter]=useState('all'),[notice,setNotice]=useState('');
  const scheduler=useRef(new LiveAnimationScheduler());
  const [foreground,setForeground]=useState(()=>!document.hidden);
@@ -57,7 +71,7 @@ export function LiveOffice({active,onMode,channel='claude',onChannel}:{active:bo
   <aside className="rail"><div className="brand-mark">o<span>✦</span></div><div className="rail-icon active">▦</div><div className="rail-bottom">LIVE<br/><span>01</span></div></aside>
   <div className="workspace">
    <header><div><div className="eyebrow">A SMALL OFFICE. OBSERVED EVENTS.</div><h1>Orbit Works <span>AI 개발회사</span></h1></div><div className="header-right"><ModeSwitch mode="live" onMode={onMode}/><span className="date">LIVE OFFICE · 실환경 미검증</span></div></header>
-   <section className="connection-panel" aria-label="Live 수집 상태"><div className="connection-summary"><strong data-testid="live-connection">● {connectionLabel}</strong><span>{snapshot?.source==='fixture'?'TEST FIXTURE · 합성 수집 경로':'LIVE TRANSPORT'} / 실환경 미검증</span><span data-testid="live-last-event">최근 이벤트: {time(snapshot?.lastEventAt)}</span></div><p>{channel==='omp'?'OMP 실행 관측만 표시합니다. Claude와의 업무 연결은 아직 추정하지 않습니다.':'인증된 Claude 최상위 세션 관측만 표시합니다.'} 업무 성공·완료는 판정하지 않습니다. 연결 장애는 세션 종료를 뜻하지 않습니다.</p></section>
+   <section className="connection-panel" aria-label="Live 수집 상태"><div className="connection-summary"><strong data-testid="live-connection">● {connectionLabel}</strong><span>{snapshot?.source==='fixture'?'TEST FIXTURE · 합성 수집 경로':'LIVE TRANSPORT'} / 실환경 미검증</span><span data-testid="live-last-event">최근 이벤트: {time(snapshot?.lastEventAt)}</span>{channel==='omp'&&<span data-testid="omp-outbox-status">{outboxLabel(outbox)}</span>}</div><p>{channel==='omp'?'OMP 실행 관측만 표시합니다. Claude와의 업무 연결은 아직 추정하지 않습니다.':'인증된 Claude 최상위 세션 관측만 표시합니다.'} 업무 성공·완료는 판정하지 않습니다. 연결 장애는 세션 종료를 뜻하지 않습니다.</p></section>
    <section className="overview"><div className="intro"><span className="live-dot"/> LIVE OFFICE <small>관찰된 세션만 함께하는 사무실</small></div><div className="metric"><b data-testid="live-count">{actors.length}</b><span>관찰 세션</span></div><div className="metric"><b data-testid="live-working">{actors.filter(a=>isFresh(a)&&a.status==='working').length}</b><span>도구 실행 관찰</span></div><div className="metric"><b data-testid="live-approval">{actors.filter(a=>isFresh(a)&&a.status==='approval').length}</b><span>승인 요청</span></div></section>
    <main><section className="office-panel"><div className="panel-toolbar"><div><span className="eyebrow">THE OBSERVED FLOOR</span><h2>{channel==='omp'?'OMP 관찰 사무실':'Claude 세션 사무실'} <span>1F</span></h2></div><div className="filters"><label>관찰 채널<select aria-label="Live 관찰 채널" value={channel} onChange={e=>onChannel?.(e.target.value as 'claude'|'omp')}><option value="claude">Claude Code</option><option value="omp">OMP</option></select></label><label>세션 필터<select aria-label="Live 세션 필터" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">모든 세션</option>{actors.map(a=><option key={a.actorId} value={a.actorId}>{a.name}</option>)}</select></label></div></div>
     <div className="canvas-wrap">{office?<OfficeCanvas office={office} agents={renderActors} selected={current?.renderId??0} zoom={zoom} onSelect={setSelected} onMove={move}/>:<p className="loading">{error?'에셋을 확인하세요.':'관찰 사무실을 준비하고 있어요…'}</p>}{actors.length===0&&<div className="live-empty" data-testid="live-empty"><b>{connection==='unprepared'?'연결 준비 필요':channel==='omp'?'관찰된 OMP 실행이 없습니다':'관찰된 Claude 세션이 없습니다'}</b><span>{channel==='omp'?'OMP session.start 수신 전에는 캐릭터를 만들지 않습니다.':'SessionStart 수신 전에는 캐릭터를 만들지 않습니다.'}</span></div>}<div className="floor-tag">ORBIT CAMPUS <span>● {snapshot?.source==='fixture'?'TEST FIXTURE':'LIVE / 미검증'}</span></div><div className="zoom-controls"><button aria-label="축소" onClick={()=>setZoom(v=>Math.max(.65,v-.1))}>−</button><span>{Math.round(zoom*100)}%</span><button aria-label="확대" onClick={()=>setZoom(v=>Math.min(1.6,v+.1))}>+</button></div></div>

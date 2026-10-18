@@ -62,11 +62,20 @@ try {
   await page.getByRole("button", { name: "LIVE OFFICE", exact: true }).click();
   await page.getByLabel("Live 관찰 채널").selectOption("omp");
   await expect(page.getByTestId("live-count")).toHaveText("0");
+  await expect(page.getByTestId("omp-outbox-status")).toContainText(
+    "송신 큐 대기 2",
+  );
+  result.outboxStatusVisible = true;
   expect((await replayOmpOutbox({ directory, bridgeDirectory })).pending).toBe(
     0,
   );
   await expect(page.getByTestId("live-count")).toHaveText("1");
   await expect(page.getByTestId("live-working")).toHaveText("0");
+  await expect(page.getByTestId("omp-outbox-status")).toContainText(
+    "송신 큐 대기 0",
+    { timeout: 15000 },
+  );
+  result.outboxDrained = true;
   const actors = async () =>
     JSON.parse(
       (await page.locator("canvas").getAttribute("data-actors")) ?? "[]",

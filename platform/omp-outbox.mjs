@@ -308,6 +308,11 @@ export async function replayOmpOutbox({
           ) {
             result.rejected = true;
             result.lastStatus = error.statusCode;
+            try {
+              recordRejection(directory, error.statusCode);
+            } catch {
+              /* The rejection note is advisory; pending events are retained. */
+            }
           } else result.offline = true;
           break;
         }
@@ -361,4 +366,233 @@ export async function replayOmpOutbox({
       if (e.code !== "ENOENT") result.blockedRuns++;
     }
   return result;
+}
+// The last receiver rejection is an advisory operator note. It carries a
+// status code and time only: never prompts, credentials, or event payloads.
+function recordRejection(directory, statusCode) {
+  const bytes = Buffer.from(
+    JSON.stringify({ version: 1, at: new Date().toISOString(), statusCode }),
+  );
+  const temp = path.join(directory, "." + randomUUID() + ".tmp");
+  const fd = fs.openSync(temp, "wx", 0o600);
+  try {
+    try {
+      fs.writeFileSync(fd, bytes);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(temp, path.join(directory, "last-rejection.json"));
+    syncDir(directory);
+  } finally {
+    try {
+      fs.unlinkSync(temp);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+}
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+};
+// Distinguish a live, dead, and absent registry without opening a transport.
+function probeRegistry(bridgeDirectory) {
+  const probe = { state: "missing", installationInstanceId: null };
+  try {
+    const file = path.join(bridgeDirectory, "runtime/omp.json");
+    if (!fs.existsSync(file)) return probe;
+    if (assertPrivate(file).size > 4096) return probe;
+    const r = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (
+      r.providerId !== "omp" ||
+      !uuid(r.installationInstanceId) ||
+      !Number.isInteger(r.pid) ||
+      r.pid <= 0
+    )
+      return probe;
+    probe.installationInstanceId = r.installationInstanceId;
+    probe.state = alive(r.pid) ? "alive" : "stale";
+  } catch {
+    /* An unreadable registry is reported as missing, never modified. */
+  }
+  return probe;
+}
+// Read-only queue status for operators and the office UI. It never sends,
+// deletes, or creates events; counts are filename-level and a corrupted run
+// is reported through blockedRuns instead of being repaired.
+export function readOmpOutboxStatus({ directory, bridgeDirectory } = {}) {
+  const status = {
+    version: 1,
+    prepared: false,
+    enrolled: false,
+    pending: 0,
+    retainedRuns: 0,
+    capacityRemaining: 1024,
+    blockedRuns: 0,
+    installationMismatch: false,
+    registry: "missing",
+    writers: [],
+    lastRejection: null,
+    recoveryRequired: false,
+  };
+  const registry = probeRegistry(bridgeDirectory);
+  status.registry = registry.state;
+  if (typeof directory !== "string" || !fs.existsSync(directory)) return status;
+  assertPrivate(directory, { directory: true });
+  status.prepared = true;
+  const bindingFile = path.join(directory, "binding.json");
+  let b = null;
+  if (fs.existsSync(bindingFile)) {
+    b = binding(directory, null, false);
+    status.enrolled = true;
+  }
+  if (
+    b &&
+    registry.state === "alive" &&
+    registry.installationInstanceId !== b.installationInstanceId
+  )
+    status.installationMismatch = true;
+  try {
+    const r = read(path.join(directory, "last-rejection.json"));
+    if (
+      Object.keys(r).sort().join() === "at,statusCode,version" &&
+      r.version === 1 &&
+      typeof r.at === "string" &&
+      Number.isFinite(Date.parse(r.at)) &&
+      Number.isInteger(r.statusCode) &&
+      r.statusCode >= 400 &&
+      r.statusCode < 500
+    )
+      status.lastRejection = { at: r.at, statusCode: r.statusCode };
+  } catch {
+    /* A missing or malformed note is simply not reported. */
+  }
+  let runs = [];
+  try {
+    runs = slots(directory);
+  } catch {
+    return status;
+  }
+  for (const name of runs) {
+    try {
+      const run = path.join(directory, name);
+      assertPrivate(run, { directory: true });
+      const owner = ownerRecord(run);
+      const pending = entries(run);
+      if (pending.length > 128) fail();
+      status.pending += pending.length;
+      status.writers.push({
+        run: name,
+        pid: owner.pid,
+        alive: alive(owner.pid),
+      });
+    } catch (error) {
+      if (error.code !== "ENOENT") status.blockedRuns++;
+    }
+  }
+  status.retainedRuns = runs.length;
+  status.capacityRemaining = 1024 - runs.length;
+  // Bounded recovery signal: queued work exists, the bridge is reachable and
+  // enrolled to this queue, and no producer still owns a run. This is a hint
+  // for the explicit `npm run omp:replay` command; no daemon acts on it.
+  status.recoveryRequired =
+    status.pending > 0 &&
+    status.registry === "alive" &&
+    !status.installationMismatch &&
+    status.writers.every((w) => !w.alive);
+  return status;
+}
+// Explicit, operator-invoked maintenance: move fully delivered runs into a
+// private archive so the 1024-slot budget can be reused. Nothing is deleted;
+// incomplete, pending, blocked, or writer-owned runs are retained and
+// reported. Safety first: an unenrolled queue or a conflicting live
+// installation always refuses.
+export function archiveOmpOutboxRuns({ directory, bridgeDirectory, apply = false } = {}) {
+  const report = {
+    enabled: apply === true,
+    prepared: false,
+    scannedRuns: 0,
+    archivableRuns: [],
+    archivedRuns: [],
+    retainedPending: [],
+    retainedIncomplete: [],
+    retainedWriters: [],
+    retainedBlocked: [],
+    archiveDirectory: null,
+  };
+  if (typeof directory !== "string" || !fs.existsSync(directory)) return report;
+  assertPrivate(directory, { directory: true });
+  report.prepared = true;
+  if (!fs.existsSync(path.join(directory, "binding.json"))) fail();
+  const b = binding(directory, null, false);
+  const registry = probeRegistry(bridgeDirectory);
+  if (
+    registry.state === "alive" &&
+    registry.installationInstanceId !== b.installationInstanceId
+  )
+    fail();
+  const runs = slots(directory);
+  report.scannedRuns = runs.length;
+  for (const name of runs) {
+    const run = path.join(directory, name);
+    let owner, files;
+    try {
+      assertPrivate(run, { directory: true });
+      owner = ownerRecord(run);
+      files = entries(run);
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      report.retainedBlocked.push(name);
+      continue;
+    }
+    if (files.length) {
+      report.retainedPending.push(name);
+      continue;
+    }
+    if (alive(owner.pid)) {
+      report.retainedWriters.push(name);
+      continue;
+    }
+    // Without the completion marker a forced stop left this execution
+    // unverified; it stays in place instead of being guessed complete.
+    let marker = null;
+    try {
+      marker = read(path.join(run, "complete.json"));
+    } catch {
+      marker = null;
+    }
+    if (
+      !marker ||
+      Object.keys(marker).sort().join() !== "executionId,finalSequence,version" ||
+      marker.version !== 1 ||
+      marker.executionId !== owner.executionId ||
+      !Number.isSafeInteger(marker.finalSequence) ||
+      marker.finalSequence < 1 ||
+      marker.finalSequence > 128
+    ) {
+      report.retainedIncomplete.push(name);
+      continue;
+    }
+    report.archivableRuns.push(name);
+  }
+  if (!apply || !report.archivableRuns.length) return report;
+  const archiveRoot = path.join(directory, "archive");
+  ensurePrivateDirectory(archiveRoot);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const target = path.join(archiveRoot, stamp);
+  fs.mkdirSync(target, { mode: 0o700 });
+  ensurePrivateDirectory(target);
+  for (const name of report.archivableRuns) {
+    fs.renameSync(path.join(directory, name), path.join(target, name));
+    report.archivedRuns.push(name);
+  }
+  syncDir(archiveRoot);
+  syncDir(target);
+  report.archiveDirectory = path.join("archive", stamp);
+  return report;
 }

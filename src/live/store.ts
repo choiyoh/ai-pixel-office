@@ -60,4 +60,13 @@ export function applyChanges(current:LiveSnapshot,response:LiveChanges):LiveSnap
  return {...current,revision,cursor:response.cursor,receivedAt:response.receivedAt,lastEventAt:changes.length?response.receivedAt:current.lastEventAt,actors:[...actors.values()],tombstones,timeline:[...new Map(timeline.map(e=>[e.revision,e])).values()].slice(0,100)};
 }
 export function freshness(actor:LiveActor,now:number,transportOffline=false){return transportOffline||now-Date.parse(actor.lastEventAt)>120000?'offline':actor.restored||(actor.quality!==undefined&&actor.quality!=='contiguous')||now-Date.parse(actor.lastEventAt)>30000?'stale':'fresh';}
+export interface OmpOutboxStatus{prepared:boolean;enrolled:boolean;pending:number;retainedRuns:number;capacityRemaining:number;blockedRuns:number;installationMismatch:boolean;registry:'missing'|'alive'|'stale';writers:{run:string;pid:number;alive:boolean}[];lastRejection:{at:string;statusCode:number}|null;recoveryRequired:boolean}
+export function parseOmpOutboxStatus(v:unknown):OmpOutboxStatus{
+ if(!object(v)||typeof v.prepared!=='boolean'||typeof v.enrolled!=='boolean')throw Error('Invalid OMP outbox status');
+ if(!integer(v.pending)||!integer(v.retainedRuns)||!integer(v.capacityRemaining)||v.capacityRemaining>1024||!integer(v.blockedRuns)||typeof v.installationMismatch!=='boolean'||typeof v.recoveryRequired!=='boolean')throw Error('Invalid OMP outbox counts');
+ if(v.registry!=='missing'&&v.registry!=='alive'&&v.registry!=='stale')throw Error('Invalid OMP outbox registry');
+ if(!Array.isArray(v.writers)||v.writers.length>1024||!v.writers.every(w=>object(w)&&typeof w.run==='string'&&/^run-\d{4}$/.test(w.run)&&integer(w.pid)&&w.pid>0&&typeof w.alive==='boolean'))throw Error('Invalid OMP outbox writers');
+ if(v.lastRejection!==null&&(!object(v.lastRejection)||!timestamp(v.lastRejection.at)||!integer(v.lastRejection.statusCode)||v.lastRejection.statusCode<400||v.lastRejection.statusCode>=500))throw Error('Invalid OMP outbox rejection');
+ return v as unknown as OmpOutboxStatus;
+}
 export const liveLabels:Record<LiveStatus|'session-ended',string>={observed:'세션 시작 관찰',working:'도구 실행 중',approval:'승인 요청','waiting-input':'사용자 입력 대기','turn-ended':'턴 종료 · 업무 결과 미확정','between-tools':'도구 종료 · 다음 상태 미확인','tool-failed':'도구 실패',unknown:'상태 미확인','session-ended':'세션 종료'};

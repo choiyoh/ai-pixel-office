@@ -28,6 +28,7 @@
     "bridge:start": "node scripts/provider-bridge.mjs",
     "test:omp-office-browser": "node scripts/omp-office-browser.mjs",
     "omp:replay": "node scripts/replay-omp-outbox.mjs",
+    "omp:archive": "node scripts/archive-omp-outbox.mjs",
     "test:omp-outbox-browser": "node scripts/omp-outbox-browser.mjs"
   },
   "dependencies": {
