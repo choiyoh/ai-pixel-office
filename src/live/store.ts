@@ -46,7 +46,7 @@ const sceneActor=(v:unknown):v is LiveActor=>{
  if(!member(liveStatuses,v.status)||!member(liveKinds,v.kind))return false;
  if(!(v.lastTool===null||member(liveTools,v.lastTool)))return false;
  if(!timestamp(v.observedAt)||!timestamp(v.lastEventAt))return false;
- if(!(v.receivedAt===undefined||timestamp(v.receivedAt)))return false;
+ if(!(v.receivedAt===undefined||v.receivedAt===null||timestamp(v.receivedAt)))return false;
  if(typeof v.restored!=='boolean'||typeof v.environment!=='string')return false;
  if(!/^(linux|darwin|win32)\/(x64|arm64)( · WSL)?$/.test(v.environment))return false;
  const prefix=v.providerId==='omp'?'OMP · ':'Claude · ';

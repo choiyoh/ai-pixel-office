@@ -150,6 +150,17 @@ test("one unavailable channel leaves the other channel visible", () => {
   ]);
 });
 
+test("an actor that never reported receivedAt omits the field instead of nulling it", () => {
+  const claude = claudeSnapshot();
+  delete claude.actors[0].receivedAt;
+  const scene = projectScene({
+    claude,
+    omp: { ready: false, error: "omp-unavailable" },
+  });
+  assert.equal("receivedAt" in scene.actors[0], false);
+  assert.equal(scene.actors[0].lastEventAt, claude.actors[0].observedAt);
+});
+
 test("the merged timeline is ordered newest first and capped", () => {
   const early = "2026-10-18T00:00:00Z";
   const late = "2026-10-18T00:05:00Z";

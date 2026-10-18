@@ -20,6 +20,7 @@ function latest(left, right) {
 
 function claudeActor(a, installation, source, environment) {
   if (!object(a) || !integer(a.renderId) || a.renderId < 1) return null;
+  const observedAt = text(a.observedAt);
   return {
     actorId: a.actorId,
     sceneId: a.renderId,
@@ -35,9 +36,11 @@ function claudeActor(a, installation, source, environment) {
     status: text(a.status) ?? "observed",
     kind: text(a.kind) ?? "sessionStart",
     lastTool: text(a.lastTool),
-    observedAt: text(a.observedAt),
-    lastEventAt: text(a.lastEventAt),
-    receivedAt: text(a.receivedAt),
+    observedAt,
+    lastEventAt: text(a.lastEventAt) ?? observedAt,
+    // Omitted (not null) when the channel never reported it: an explicit null
+    // fails the client's optional-field validation.
+    ...(text(a.receivedAt) ? { receivedAt: text(a.receivedAt) } : {}),
     restored: a.restored === true,
     delegatedBy: null,
   };
@@ -58,6 +61,7 @@ function ompActor(a, installation, source, environment) {
             : null,
       }
     : null;
+  const observedAt = text(a.observedAt);
   return {
     actorId: a.actorId,
     sceneId: OMP_RENDER_OFFSET + a.renderId,
@@ -73,9 +77,9 @@ function ompActor(a, installation, source, environment) {
     status: text(a.status) ?? "observed",
     kind: text(a.kind) ?? "sessionStart",
     lastTool: text(a.lastTool),
-    observedAt: text(a.observedAt),
-    lastEventAt: text(a.lastEventAt),
-    receivedAt: text(a.receivedAt),
+    observedAt,
+    lastEventAt: text(a.lastEventAt) ?? observedAt,
+    ...(text(a.receivedAt) ? { receivedAt: text(a.receivedAt) } : {}),
     restored: a.restored === true,
     quality: text(a.quality) ?? "contiguous",
     modelFamily: text(a.modelFamily) ?? "unknown",
