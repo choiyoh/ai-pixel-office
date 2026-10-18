@@ -1,12 +1,12 @@
-# Orbit Works 인수인계서 — P2-B.4 운영 적용 완료
+# Orbit Works 인수인계서 — P2-B.6 ① relay↔executor correlation 운영 적용 완료
 
 **다음 에이전트는 이 문서를 먼저 읽고, 현재 상태를 읽기 전용으로 재확인한 뒤 사용자께서 지정하는 다음 작업을 진행해 주세요. 이 문서 작성 자체는 새 기능 구현이나 서버 재시작 요청이 아닙니다.**
 
-- 최종 운영 확인: **2026-10-18 22:00:37 KST**. 정확한 시각·상태는 [인수인계 상태 스냅샷](handoff/p2-b4-mac-status.json)에 있습니다.
-- 검증·배포된 코드: **`ca627c5631d28a73cf1d680dbd1e4358f68882c5`**.
-- 최신 작업 브랜치: **`codex/p2-b4-omp-outbox`**, origin에 push되어 있습니다.
-- 이 인수인계서·증거를 추가한 후 HEAD는 문서 추가 커밋일 수 있습니다. **코드 CI의 headSha는 위 ca627c5이며, 문서 커밋에 새 코드 CI가 통과했다고 주장하지 않습니다.**
-- 프로젝트는 P2-A.4, P2-B.1~B.4까지 진행했습니다. **P2-B 전체의 모든 요구가 완료된 것은 아닙니다.**
+- 최종 운영 확인: **2026-10-18 23:54 KST**.
+- 검증·배포된 코드: **`f153a2d`**(기능) + **`0650e3f`**(실증·재현 절차 문서). CI는 f153a2d의 [39135067830](https://github.com/choiyoh/ai-pixel-office/actions/runs/39135067830) 3-OS success입니다.
+- 최신 작업 브랜치: **`codex/p2-b6-relay-executor-correlation`**, origin에 push되어 있습니다.
+- 이후 문서 커밋(`8f9ca39`·`0650e3f`)에 새 코드 CI가 통과했다고 주장하지 않습니다. **코드 기준은 위 f153a2d입니다.**
+- 프로젝트는 P2-A.4, P2-B.1~B.6 ①까지 진행했습니다. **P2-B 전체의 모든 요구가 완료된 것은 아닙니다** — 동시 provider scene, OMP Resume/Edit, Windows/Linux native가 남아 있습니다.
 
 ## 1. 가장 먼저 알아야 할 현재 상태
 
@@ -16,14 +16,14 @@
 | 로컬 화면 | <http://127.0.0.1:4173> → **LIVE OFFICE → 관찰 채널 OMP** |
 | 실제 실행 경로 | **Claude Code `omp-deepseek` → 내구 관찰 래퍼 → OMP → Command Code provider → DeepSeek** |
 | Claude 경로 | 기존 사용자 Hook → 별도 Claude intake/ledger → Claude 관찰 채널 |
-| 화면 통합 범위 | Claude/OMP를 **채널 전환으로** 표시. 같은 scene에서 합치거나 업무를 중복 제거하지 않음 |
-| 새 OMP 송신기 | **`scripts/observe-omp-durable.mjs`가 전역 위임 정의에 적용됨** |
+| 화면 통합 범위 | Claude/OMP를 **채널 전환으로** 표시. OMP 실행에는 **검증된 실행 증명이 일치할 때만** 위임 출처(`Claude · 00N`)를 표시. 같은 scene 통합·업무 중복 제거는 미구현 |
+| 새 OMP 송신기 | **`scripts/observe-omp-durable.mjs`가 전역 위임 정의에 적용됨**. Claude 조상 실행 증명을 OMP `session.start.parentExecution`에 부착 |
 | 운영 Outbox | 실제 등록·생성·가동 완료. 더 이상 적용 승인 대기 상태가 아님 |
 | 서버 | 웹4173 / Bridge4183 모두 실행 중. PID는 아래 시점별 값이며 항상 재확인 필요 |
-| 마지막 관찰값 | Claude actor0, OMP actor0, Bridge terminal7, Bridge pending0, Outbox pending0 |
+| 마지막 관찰값 | Claude actor0, OMP actor0, Bridge executions10(ledger v3), Bridge pending0, Outbox pending0 |
 | Outbox 예약 | 사용2 / 잔여1022. ACK된 event 파일은 없고 owner/complete 예약은 보존됨 |
-| 현재 코드 작업 트리 | 인수인계 문서 작업 전 clean. 새 문서는 별도로 commit/push함 |
-| CI | ca627c5의 Windows/macOS/Linux 모두 성공 |
+| 현재 코드 작업 트리 | clean |
+| CI | f153a2d의 Windows/macOS/Linux 모두 성공 |
 | 이번 인수인계 작업 | 설정·서버·ledger 변경 없이 문서/검증 근거만 정리 |
 
 **주의:** `docs/P2-B.1~4`의 일부 본문, 예전 로컬 보고서에는 작성 당시의 “미검증/미적용/승인 대기/미구현” 문구가 남아 있습니다. 현재 운영 적용에 관해서는 **이 인수인계서와 최종 적용 증거**가 우선입니다. 이미 완료된 송신기 교체나 Hook 설치를 다시 수행하지 마세요.
@@ -34,7 +34,7 @@
 2. 기존 Claude Code·Command Code provider·DeepSeek·OMP 환경을 유지합니다. 불필요한 재설치/업데이트/로그인/인증 재설정을 하지 않습니다.
 3. 사용자의 명시적 조건: **“Hook sender 변경이나 설정 수정이 필요하면 예상 Diff를 먼저 제출하고 별도 승인을 받습니다.”** 새 변경은 구현·격리 검사·정확한 Diff를 먼저 준비해 운영 적용만 최종 승인 대상으로 만듭니다.
 4. 기존 서버를 승인 없이 종료하지 않습니다. 승인받은 재시작도 실제 PID·command·cwd·registry 소유·활성 actor를 먼저 확인합니다. `killall`/넓은 `pkill`로 종료하지 않습니다.
-5. 이미 승인·완료된 과거 적용을 다시 승인받거나 반복하지 않습니다. 현재 P2-B.4 적용은 완료됐습니다. 향후 다른 변경의 승인까지 포괄하는 것은 아닙니다.
+5. 이미 승인·완료된 과거 적용을 다시 승인받거나 반복하지 않습니다. 현재 P2-B.4·B.5·B.6 ① 적용은 완료됐습니다. 향후 다른 변경의 승인까지 포괄하는 것은 아닙니다.
 6. Hook은 **12종 각1개**가 설치되어 있습니다. 설치/중복 등록하지 않습니다. `settings.json`을 덮어쓰지 않습니다.
 7. prompt·도구 인자·결과·파일 경로·원본 native ID·credential을 이벤트/큐/UI에 저장하거나 전달하지 않습니다. 문서의 운영 파일 경로와 승인 Diff는 이 제한의 이벤트 payload가 아닙니다.
 8. `omp token`, `omp auth export`, credential DB/키 출력, 환경 변수 전체 덤프를 하지 않습니다. `~/.omp` auth DB나 private backup을 Git에 올리지 않습니다.
@@ -104,8 +104,10 @@ claude --version
 
 | 서비스 | 마지막 확인 PID | 포트 | 실행 |
 | --- | ---: | ---: | --- |
-| 웹/Claude receiver | **67963** | **4173** | Node22 `server/app.mjs`, `ORBIT_MODE=claude-local` |
-| OMP Provider Bridge | **67960** | **4183** | Node22 `scripts/provider-bridge.mjs` |
+| 웹/Claude receiver | **29448** | **4173** | Node22 `server/app.mjs`, `ORBIT_MODE=claude-local` |
+| OMP Provider Bridge | **28881** | **4183** | Node22 `scripts/provider-bridge.mjs` |
+
+(Bridge 설치 UUID `53efa927…`는 P2-B.4·B.5·B.6 재시작을 거쳐 유지됐고, Outbox binding·등록 토큰이 계속 일치합니다. PID는 재활용될 수 있으므로 문서 값만 보고 kill하지 않습니다.)
 
 둘 다 `CODE`를 cwd로 가집니다. 프로세스는 이 작업에서 시작한 foreground 앱의 detached 자식이며 **로그인 자동 시작/상주 서비스 설치를 하지 않았습니다**. PID는 재활용될 수 있으므로 문서 값만 보고 kill하지 않습니다.
 
@@ -206,12 +208,14 @@ Hook12종: Notification, PermissionRequest, PostToolUse, PreToolUse, SessionEnd,
 | P2-B.2 | 실제 OMP18.10.0 JSON supervisor, Command Code→DeepSeek 확인, 전역 위임 연결 | **e7ccdb62c4a5abbc395aa2f43777b7ba15937108**, [CI39050396185](https://github.com/choiyoh/ai-pixel-office/actions/runs/39050396185) |
 | P2-B.3 | Live OMP 채널·신원/좌석 분리·native Read 화면·offline/reconnect/Mock 복귀 | **4f07e4c9d212d10e4980b2c4a24e1f02e9565c24**, [CI39053766035](https://github.com/choiyoh/ai-pixel-office/actions/runs/39053766035) |
 | P2-B.4 | private Outbox·별도 worker·receipt 확인 재전송·원래 관찰 시각 보존·운영 송신기 교체·두 서버 재시작 | **ca627c5631d28a73cf1d680dbd1e4358f68882c5**, [최종 CI39113460790](https://github.com/choiyoh/ai-pixel-office/actions/runs/39113460790) |
+| P2-B.5 | 읽기 전용 Outbox status(보존 실행·여유·blocked·설치 불일치·last rejection)·recovery 힌트·archive 도구, 웹 서버 운영 적용 | **a02aca5**+**636df55**, [CI39132147816](https://github.com/choiyoh/ai-pixel-office/actions/runs/39132147816) |
+| P2-B.6 ① | relay↔executor 실제 correlation: `parentExecution`(HMAC 실행 증명) 계약·Bridge ledger v3·웹 대조·UI 위임 출처, 두 서버 재시작 후 실제 위임 실증 | **f153a2d**+**0650e3f**, [CI39135067830](https://github.com/choiyoh/ai-pixel-office/actions/runs/39135067830) |
 
 P2-A.4의 실제 Mac PASS: ANIMATION_PASS, SESSION_RESUME_PASS, MAC_LIVE_PASS, CROSS_PLATFORM_CI_PASS. 실제 Claude Read/Edit와 generation1→2→3·좌석 유지·새로고침·서버 재시작·별도 독립 세션을 확인했습니다.
 
 **범위 제한:** Claude Resume PASS는 **새 native 프로세스의 `--resume`**입니다. 동일 프로세스 interactive `/resume`은 근거가 부족해 지원하지 않습니다. Mac 생성 표식이 초 단위여서 종료와 같은 초의 재실행도 모호하면 거부합니다. 실제 관찰한 source는 startup/resume, end reason은 other입니다. clear/compact/fork 및 다른 reason은 계약/자동화 검사와 실제 interactive 검증을 구분해야 합니다.
 
-P2-B 실제 Mac 검사는 OMP/DeepSeek **Read**를 검증했습니다. OMP의 실제 Edit/Resume, Windows/Linux의 실제 Claude/OMP 인증·모델 실행을 검증했다고 주장하지 않습니다. CI는 그런 native 모델 실행 대신 합성 자식/fixture를 사용합니다.
+P2-B 실제 Mac 검사는 OMP/DeepSeek **Read**를 검증했습니다. P2-B.6 ①에서는 실제 Claude Code 위임에서 Claude 조상 실행 증명이 OMP session.start에 부착되고, 웹 서버의 HMAC 대조로 OMP actor에 위임 출처가 표시되는 것까지 실화면으로 확인했습니다. OMP의 실제 Edit/Resume, Windows/Linux의 실제 Claude/OMP 인증·모델 실행을 검증했다고 주장하지 않습니다. CI는 그런 native 모델 실행 대신 합성 자식/fixture를 사용합니다.
 
 ## 9. 데이터 경로와 파일 지도
 
@@ -394,7 +398,9 @@ gh run view 39113460790 --json headSha,status,conclusion,jobs
 - [실제 offline OMP→복구 검사 JSON](handoff/p2-b4-offline-validation.json)
 - [실제 내구 송신기 화면](images/p2-b4-mac-read.png)
 - [실제 약2MB 짧은 녹화](videos/p2-b4-mac-read.webm)
-- [최종 코드 CI](https://github.com/choiyoh/ai-pixel-office/actions/runs/39113460790)
+- [P2-B.4 최종 코드 CI](https://github.com/choiyoh/ai-pixel-office/actions/runs/39113460790)
+- [P2-B.5 코드 CI](https://github.com/choiyoh/ai-pixel-office/actions/runs/39132147816) · [P2-B.6 ① 코드 CI](https://github.com/choiyoh/ai-pixel-office/actions/runs/39135067830)
+- P2-B.6 ① 운영 실증(2026-10-18): Bridge ledger v2→v3, 실제 위임 2회에서 OMP actor에 `delegatedBy = Claude · 017` · `Claude · 019`(HMAC 대조 일치) 표시. 실화면에서 카드 `← Claude · 019` · 인스펙터 `위임 출처 / Claude · 019 · 실행 증명 일치` 확인. 실행 후 outbox pending0 · blocked0 · lastRejection null. 재현 절차는 `docs/P2-B.6-RELAY-EXECUTOR-CORRELATION.md` 4.2.
 
 두 차례 전역 Claude 위임에서 새 durable wrapper, OMP/Command Code/DeepSeek Read, 반환 결과, native exit0, event5개씩, pending0을 확인했습니다. 두 번째 실행의 실제 Read 연출 약**731ms**(정책750ms), 도구 종료 상태와 working0 동시 표시, native 종료 후 제거를 확인했습니다.
 
@@ -431,18 +437,17 @@ P2-B.4 적용 시 활성 actor0을 확인하고 두 서버를 승인 후 정상 
 
 우선순위는 다음 작업 요청을 받은 뒤 확정하세요. 이 인수인계서만 읽고 자동 배포하지 않습니다.
 
-### 권장 1: 운영 관찰/복구 편의(P2-B.5 제안)
+### 완료됨: P2-B.5 운영 관찰/복구 편의
 
-- 읽기 전용 queue 상태/남은 capacity/blocked·설치 불일치/last rejection을 UI에 안전하게 표시.
-- **모든 producer가 끝난 뒤** 서버가 복구되는 경우의 bounded recovery 설계. 서버 시작 시 wake-up/명시적 복구 동작 등 검토. 상주 daemon/로그인 자동 시작을 임의 설치하지 않음.
-- pending0·모든 writer/worker 종료·완료 marker/설치 신원을 검증하는 archive/복구 절차. 예약과 Bridge 상한을 기록 삭제로 우회하지 않음.
-- 강제 종료로 실제 close를 관찰 못한 실행은 상태 미확인으로 남을 수 있음. 가짜 execution.end를 만드는 cleanup은 금지.
+읽기 전용 Outbox status(보존 실행·여유·blocked·설치 불일치·last rejection)·bounded recovery 힌트·archive 도구가 코드·격리 검증·문서·**운영 웹 서버 적용**까지 완료됐습니다. 설계·보장 범위는 `docs/P2-B.5-OMP-OUTBOX-OPERATIONS.md`가 최신입니다. 상주 daemon/로그인 자동 시작은 설치하지 않았습니다.
 
-검사 제안: producer 모두 종료→Bridge 나중에 복구, ACK 손실 후 process restart, quota/디스크·권한 오류, 부정확한 clock/과거 이벤트, concurrent drain/archive 경합, 설치 UUID 변경, malformed/부분 batch ack, UI 민감정보 부재. 실제 기존 환경 변경은 Diff 승인 후.
+### 완료됨: P2-B.6 ① 실제 relay/executor correlation
 
-### 권장 2: 실제 relay/executor correlation과 동시 scene
+Claude 조상 실행 증명(pid/birth)을 OMP `session.start`에 부착하고, 웹 서버가 두 채널 공통 HMAC으로 대조해 일치할 때만 위임 출처를 표시합니다. Bridge ledger v3, 운영 적용·실제 위임 실증까지 완료했습니다. `docs/P2-B.6-RELAY-EXECUTOR-CORRELATION.md`가 최신입니다.
 
-현재 Claude Haiku relay와 OMP executor를 실제 delegation ID로 묶지 않습니다. 서버 측 사전 등록 contract만 기반에 있습니다. 이름/prompt 유사도로 합치지 않습니다. 동시 provider scene은 actor/render namespace·좌석·종료·중복 회계를 먼저 설계해야 합니다. 현재 채널 전환 구현을 “통합 scene 완료”라고 부르지 마세요.
+### 아직 남음: 동시 provider scene
+
+Claude·OMP를 **같은 scene에서** 함께 그리는 작업은 미구현입니다. actor/render namespace·좌석 배정·종료·중복 회계를 먼저 설계해야 합니다. 현재의 채널 전환 + 위임 출처 표시를 "통합 scene 완료"라고 부르지 마세요.
 
 ### 별도 과제: OMP Resume / 다른 OS native 실행
 
@@ -467,4 +472,4 @@ Windows/Linux 실제 OMP·DeepSeek 연결, 실제 OMP Edit는 미검증입니다
 
 ## 17. 새 에이전트에게 그대로 전달할 시작 지시
 
-> Orbit Works의 인수인계서 `docs/HANDOFF-P2-B4-MAC.md`를 먼저 읽어 주세요. 최신 브랜치는 `codex/p2-b4-omp-outbox`, 검증 코드 기준은 `ca627c5631d28a73cf1d680dbd1e4358f68882c5`입니다. P2-B.4 내구 송신기 운영 적용은 이미 완료됐습니다. 같은 Mac이면 `orbit-works-p2a4`에서 읽기 전용으로 현재 Git·프로세스·설정 fingerprint·actor/pending 상태를 재확인하고, 기존 Hook/OMP 환경과 A3 설치 checkout을 유지해 주세요. 이전 문서의 미적용 계획을 재실행하지 마세요. 다음 작업은 사용자가 지정하는 범위로 진행하며, 새 sender/설정 변경은 구현·격리 검증·정확한 Diff를 먼저 준비한 뒤 별도 승인받아 적용하세요. 한국어 존댓말을 사용하고 실제 검증된 범위에만 PASS를 부여해 주세요.
+> Orbit Works의 인수인계서 `docs/HANDOFF-P2-B4-MAC.md`를 먼저 읽어 주세요. 최신 브랜치는 `codex/p2-b6-relay-executor-correlation`, 검증 코드 기준은 `f153a2d`입니다. P2-B.4 내구 송신기, P2-B.5 Outbox 관찰/복구, P2-B.6 ① relay↔executor correlation 운영 적용은 이미 완료됐습니다. 같은 Mac이면 `orbit-works-p2a4`에서 읽기 전용으로 현재 Git·프로세스·설정 fingerprint·actor/pending 상태를 재확인하고, 기존 Hook/OMP 환경과 A3 설치 checkout을 유지해 주세요. 이전 문서의 미적용 계획을 재실행하지 마세요. 다음 작업은 사용자가 지정하는 범위로 진행하며, 새 sender/설정 변경은 구현·격리 검증·정확한 Diff를 먼저 준비한 뒤 별도 승인받아 적용하세요. 한국어 존댓말을 사용하고 실제 검증된 범위에만 PASS를 부여해 주세요.
