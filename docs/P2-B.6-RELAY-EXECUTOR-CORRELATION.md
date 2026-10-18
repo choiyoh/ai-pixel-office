@@ -69,16 +69,36 @@ Bridge ledger state `version: 3`. 기존 v1/v2 파일은 로드 시 순차 업�
 기존 회귀: Bridge v1 업그레이드 테스트가 v1 스키마를 정확히 재현하도록 갱신
 (`delete e.parentExecution`). unit 31/31, integration 53 pass·4 skip(Windows 전용).
 
-## 5. 운영 적용 경계
+### 4.2 운영 실증 (2026-10-18, 실제 Mac)
+
+Bridge(4183)·웹(4173)을 새 코드로 재시작한 뒤 **실제 위임 3회**로 확인했다.
+
+- Bridge ledger **v2 → v3 자동 업그레이드**, actor에 Claude 조상 증명 저장
+  (실측 pid `31660` · `36538` · `43407`).
+- OMP 채널 actor `delegatedBy = Claude · 017` / `Claude · 019` — 이름·시간 근접이 아니라
+  HMAC 실행 증명 대조 일치로만 연결됐다.
+- UI 실화면 캡처: 카드 `← Claude · 019`, 인스펙터 `위임 출처 / Claude · 019 · 실행 증명 일치`.
+- outbox `pending 0 · blocked 0 · lastRejection null` — 거부 없이 전부 수용됐다.
+
+재현 절차(운영 위임 실증):
+1. `claude -p "Use the omp-deepseek subagent through the Task tool to delegate this to OMP: <작업>" --allowedTools Task Bash`
+   - `--allowedTools "Task"`만 주면 subagent의 Bash가 거부되어 OMP가 실행되지 않는다.
+     Task와 Bash를 **함께** 허용해야 한다.
+   - `claude --agent omp-deepseek -p …` 경로는 이 환경에서 OMP 호출을 만들지 못했다(2회 시도).
+     Task 위임 경로를 쓴다.
+2. OMP 실행은 위임 시작 후 수십 초 안에 나타난다. actor는 live일 때만 목록에 남으므로
+   표시를 확인하려면 **실행 중에** 조회해야 한다(폴링). 짧은 실행은 시작·종료만 timeline에 남는다.
+
+## 5. 운영 적용 (2026-10-18 완료)
 
 - **래퍼는 즉시 적용된다**: `omp-deepseek.md`가 CODE의 `scripts/observe-omp-durable.mjs`를
   직접 실행하므로 다음 위임부터 새 필드가 실린다.
-- **Bridge·웹 서버는 재시작해야 한다**: 구버전 Bridge는 `parentExecution` 키를 모르는
-  allowlist라 이벤트를 422로 거부한다. 그 사이의 위임 이벤트는 삭제되지 않고
-  durable outbox에 남아(무손실) 재시작 후 `npm run omp:replay`로 전달된다.
-  다만 pending이 쌓이므로 재시작을 지연시키지 않는다.
-- 재시작 절차는 P2-B.5와 동일한 승인 절차(활성 actor 확인 → owned PID만 SIGTERM →
-  새 코드 기동 → 라우트·UI 실검증).
+- **Bridge·웹 서버 재시작 완료**: 구버전 Bridge는 `parentExecution` 키를 모르는 allowlist라
+  이벤트를 422로 거부하고, 그 사이 위임 이벤트는 삭제되지 않고 durable outbox에 남는다(무손실).
+  재시작은 P2-B.5와 같은 승인 절차로 수행했다: 활성 actor 0 확인 → 소유 PID만 SIGTERM
+  (Bridge 67960 → **28881**, 웹 10302 → **29448**) → 새 코드 기동 → 라우트·UI 실검증.
+  재시작 사이 `installationInstanceId`(`53efa927…`)가 유지되어 outbox binding·등록 토큰이
+  계속 일치했다.
 
 ## 6. 한계 (남은 범위)
 
