@@ -240,7 +240,7 @@ export function openOmpOutbox({
 export async function replayOmpOutbox({
   directory,
   bridgeDirectory,
-  maxMs = 10000,
+  maxMs = 30000,
   maxEvents = 256,
 } = {}) {
   const result = {
@@ -284,7 +284,7 @@ export async function replayOmpOutbox({
         const loaded = [];
         for (const name of files.slice(
           0,
-          Math.min(64, maxEvents - result.delivered),
+          Math.min(8, maxEvents - result.delivered),
         )) {
           if (Date.now() > deadline) break;
           try {

@@ -24,7 +24,7 @@ export function readOmpTransport({
     )
       return null;
     process.kill(r.pid, 0);
-    const post = (suffix, event, limit) =>
+    const post = (suffix, event, limit, timeoutMs = 1200) =>
       new Promise((resolve, reject) => {
         const body = JSON.stringify(event);
         let timer;
@@ -70,7 +70,7 @@ export function readOmpTransport({
             });
           },
         );
-        timer = setTimeout(() => request.destroy(), 1200);
+        timer = setTimeout(() => request.destroy(), timeoutMs);
         request.on("close", () => clearTimeout(timer));
         request.on("error", () => reject(Error("observation delivery failed")));
         request.end(body);
@@ -78,7 +78,7 @@ export function readOmpTransport({
     return {
       installationInstanceId: r.installationInstanceId,
       send: (event) => post("", event, 4096),
-      sendBatch: (events) => post("/batch", { events }, 32768),
+      sendBatch: (events) => post("/batch", { events }, 32768, 10000),
     };
   } catch {
     return null;

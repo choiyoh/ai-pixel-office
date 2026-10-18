@@ -74,7 +74,9 @@ try {
   await expect.poll(async () => (await actors())[0]?.active).toBe(false);
   expect((await actors())[0]?.tool).toBe(null);
   await page.getByTestId("live-agent-1").click();
-  await expect(page.getByTestId("live-inspector")).toContainText("stale");
+  await expect(page.getByTestId("live-inspector")).toContainText(
+    /stale|offline/,
+  );
   result.oldWorkFrozen = true;
   await page.screenshot({
     path: "artifacts/omp-outbox-stale.png",

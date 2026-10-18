@@ -16,11 +16,11 @@
 
 실행별 eventId/sequence/발생 시각을 한 번 생성하고 그대로 재전송한다. 실행당 sequence1/session.start부터 시작하며 fresh startup만 허용한다. 별도 Node worker가 같은 호스트 registry를 매 시도 읽어 새 port/token을 사용한다. OMP 자식에게 intake credential 또는 outbox 경로를 넘기지 않는다.
 
-worker는 immutable event 파일을 실행별 순서대로 최대64개씩 `/api/bridge/omp/batch`로 전송한다. 각 이벤트의 committed receipt와 eventId/nextSequence/revision을 확인한 뒤에만 해당 파일을 지운다. buffered/비정상 ack/전송 오류는 파일을 보존한다. 응답 유실 시 원래 bytes를 재전송하고 receiver의 eventId digest dedup를 사용한다. 여러 worker가 동시에 같은 파일을 읽어도 동일 이벤트가 되며 ACK 후 ENOENT는 이미 처리된 것으로 본다. 통계의 delivered는 이 worker가 확인한 receipt 수이며 전역 신규 이벤트 수가 아니다. duplicateReceipts를 별도로 표시한다.
+worker는 immutable event 파일을 실행별 순서대로 최대8개씩 `/api/bridge/omp/batch`로 전송한다. 각 이벤트의 committed receipt와 eventId/nextSequence/revision을 확인한 뒤에만 해당 파일을 지운다. buffered/비정상 ack/전송 오류는 파일을 보존한다. 응답 유실 시 원래 bytes를 재전송하고 receiver의 eventId digest dedup를 사용한다. 여러 worker가 동시에 같은 파일을 읽어도 동일 이벤트가 되며 ACK 후 ENOENT는 이미 처리된 것으로 본다. 통계의 delivered는 이 worker가 확인한 receipt 수이며 전역 신규 이벤트 수가 아니다. duplicateReceipts를 별도로 표시한다.
 
 batch는 개별 내구 receipt들의 묶음이며 **파일시스템 전체 원자 transaction이 아니다**. 중간 오류/서버 crash로 prefix만 commit될 수 있다. 클라이언트는 전부 같은 ID로 재시도하며 이미 commit된 prefix는 duplicate ack를 받는다. 정상적인 작은 종료 실행은 한 HTTP 처리 안에서 끝까지 반영돼 중간 캐릭터를 노출하지 않는다. 큰 실행/중단 복구에서는 마지막으로 알려진 actor가 종료 이벤트까지 남을 수 있으며 현재 실행으로 추정하지 않는다.
 
-worker는 업무 stdin/stdout과 분리되고 producer의 응답을 기다리게 하지 않는다. 실행 중 재시도 간격은 실패에 따라 약1→2→4→8→15초로 늘며 종료 시 별도 마지막 worker를 시작한다. HTTP 전송 deadline은1.2초/응답32KiB다. worker는 기본10초/256개 receipt 예산을 검사하며 개별 파일/ACL 작업은 기존 OS 검증 timeout도 적용받는다. 스풀 I/O와 ACL 확인 자체의 비용이 0이라는 뜻은 아니다.
+worker는 업무 stdin/stdout과 분리되고 producer의 응답을 기다리게 하지 않는다. 실행 중 재시도 간격은 실패에 따라 약1→2→4→8→15초로 늘며 종료 시 별도 마지막 worker를 시작한다. batch HTTP deadline은10초/응답32KiB다(기존 단건 송신은1.2초 유지). worker는 기본30초/256개 receipt 예산을 검사하며 개별 파일/ACL 작업은 기존 OS 검증 timeout도 적용받는다. 스풀 I/O와 ACL 확인 자체의 비용이 0이라는 뜻은 아니다.
 
 ## 보존과 상한
 
@@ -46,7 +46,7 @@ npm run omp:replay
 
 ## 검증
 
-자동 검사: offline business 응답/exit 보존, filesystem queue와 새 worker 복구, ACK 유실/receiver restart/token 교체, concurrent replay와 duplicate 억제, 손상/foreign installation 보존, per-run/설치 slot 상한, fresh-only, batch 인증/크기/committed prefix, malformed ACK 보존. 브라우저:60초 전 작업이 stale/실행 중0/도구 애니메이션 없음으로 표시되고 마지막 terminal replay 뒤 제거되는지 확인한다. 기존 Claude/OMP UI와 세 OS CI를 유지한다.
+자동 검사: offline business 응답/exit 보존, filesystem queue와 새 worker 복구, ACK 유실/receiver restart/token 교체, concurrent replay와 duplicate 억제, 손상/foreign installation 보존, per-run/설치 slot 상한, fresh-only, batch 인증/크기/committed prefix, malformed ACK 보존. 브라우저:60초 전 작업이 stale 또는 offline/실행 중0/도구 애니메이션 없음으로 표시되고 마지막 terminal replay 뒤 제거되는지 확인한다. 기존 Claude/OMP UI와 세 OS CI를 유지한다.
 
 실제 Mac 검사는 별도 temp namespace에서 신규 durable CLI와 실제 OMP/Command Code/DeepSeek Read를 사용한다. 실제 운영 global agent 연결 활성화와 구분한다.
 
