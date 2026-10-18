@@ -34,7 +34,12 @@ function get(port, url, cookie) {
     request.on("error", reject);
   });
 }
-export async function readOmpOffice({ directory, environment, source }) {
+export async function readOmpOffice({
+  directory,
+  environment,
+  source,
+  resolveDelegation = null,
+}) {
   const file = path.join(directory, "runtime/omp.json");
   if (!fs.existsSync(file))
     throw Object.assign(Error("OMP bridge unprepared"), { statusCode: 409 });
@@ -66,5 +71,6 @@ export async function readOmpOffice({ directory, environment, source }) {
     installationInstanceId: r.installationInstanceId,
     environment,
     source,
+    resolveDelegation,
   });
 }

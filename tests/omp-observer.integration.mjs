@@ -332,6 +332,7 @@ test("Bridge v1 state is upgraded without discarding its existing actor mappings
       delete e.modelFamily;
       delete e.modelProvider;
       delete e.toolFailureObserved;
+      delete e.parentExecution;
     }
     fs.writeFileSync(file, JSON.stringify(v));
     const bytes = fs.readFileSync(file),

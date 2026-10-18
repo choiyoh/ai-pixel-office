@@ -61,6 +61,8 @@ export function ompStreamEvent(raw, context) {
     if (context.startSource !== "startup")
       throw bridgeError(422, "omp-fresh-print-only");
     event.startSource = "startup";
+    if (context.parentExecution !== undefined && context.parentExecution !== null)
+      event.parentExecution = context.parentExecution;
   }
   if (kind.startsWith("tool.")) {
     if (

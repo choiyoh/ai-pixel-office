@@ -70,7 +70,7 @@ export function openProviderBridge({
   ensurePrivateDirectory(directory);
   const file = path.join(directory, "provider-bridge.json");
   let state = {
-      version: 2,
+      version: 3,
       salt: randomBytes(32).toString("hex"),
       installations: Object.fromEntries(
         providers.map((p) => [p, randomUUID()]),
@@ -96,7 +96,7 @@ export function openProviderBridge({
         "deliveries",
         "timeline",
       ]) ||
-      ![1, 2].includes(s.version) ||
+      ![1, 2, 3].includes(s.version) ||
       !hex(s.salt) ||
       !object(s.installations) ||
       Object.keys(s.installations).sort().join() !==
@@ -127,7 +127,20 @@ export function openProviderBridge({
         "occurredAt",
         "toolKey",
         "toolFailed",
+        "parentExecution",
       ]) &&
+      (e.parentExecution === undefined ||
+        (e.kind === "session.start" &&
+          object(e.parentExecution) &&
+          Object.keys(e.parentExecution).sort().join() ===
+            "birth,pid,version" &&
+          e.parentExecution.version === 1 &&
+          Number.isSafeInteger(e.parentExecution.pid) &&
+          e.parentExecution.pid > 1 &&
+          typeof e.parentExecution.birth === "string" &&
+          e.parentExecution.birth.length >= 1 &&
+          e.parentExecution.birth.length <= 80 &&
+          /^[A-Za-z0-9 .:+-]+$/.test(e.parentExecution.birth))) &&
       (e.toolFailed === undefined ||
         (e.kind === "tool.end" && typeof e.toolFailed === "boolean")) &&
       bridgeKinds.includes(e.kind) &&
@@ -179,6 +192,7 @@ export function openProviderBridge({
           "modelFamily",
           "modelProvider",
           "toolFailureObserved",
+          "parentExecution",
         ]) ||
         !hex(e.sessionKey) ||
         !providers.includes(e.providerId) ||
@@ -210,6 +224,21 @@ export function openProviderBridge({
               e.modelProvider,
             ) ||
             typeof e.toolFailureObserved !== "boolean") ||
+        (s.version >= 3
+          ? !(
+              e.parentExecution === null ||
+              (object(e.parentExecution) &&
+                Object.keys(e.parentExecution).sort().join() ===
+                  "birth,pid,version" &&
+                e.parentExecution.version === 1 &&
+                Number.isSafeInteger(e.parentExecution.pid) &&
+                e.parentExecution.pid > 1 &&
+                typeof e.parentExecution.birth === "string" &&
+                e.parentExecution.birth.length >= 1 &&
+                e.parentExecution.birth.length <= 80 &&
+                /^[A-Za-z0-9 .:+-]+$/.test(e.parentExecution.birth))
+            )
+          : e.parentExecution !== undefined) ||
         !statuses.includes(e.status) ||
         !(e.tool === null || bridgeTools.includes(e.tool)) ||
         !date(e.lastReceivedAt) ||
@@ -400,6 +429,11 @@ export function openProviderBridge({
           e.toolFailureObserved = false;
         }
       }
+      if (state.version === 2) {
+        state.version = 3;
+        for (const e of Object.values(state.executions))
+          e.parentExecution = null;
+      }
     } catch {
       throw unavailable();
     }
@@ -505,6 +539,8 @@ export function openProviderBridge({
         };
         s.sessions[e.sessionKey] = sess;
       }
+      if (item.parentExecution !== undefined)
+        e.parentExecution = item.parentExecution;
       e.started = true;
       e.generation = sess.generation;
       e.status = "observed";
@@ -661,12 +697,15 @@ export function openProviderBridge({
         modelFamily: "unknown",
         modelProvider: "unknown",
         toolFailureObserved: false,
+        parentExecution: null,
       };
       const execution = next.executions[key];
       if (event.modelFamily !== undefined)
         execution.modelFamily = event.modelFamily;
       if (event.modelProvider !== undefined)
         execution.modelProvider = event.modelProvider;
+      if (event.parentExecution !== undefined)
+        execution.parentExecution = event.parentExecution;
       const item = {
         kind: event.kind,
         sequence: event.sequence,
@@ -678,6 +717,7 @@ export function openProviderBridge({
         "startSource",
         "processOutcome",
         "toolFailed",
+        "parentExecution",
       ])
         if (event[field] !== undefined) item[field] = event[field];
       if (event.nativeToolCallId)
@@ -745,6 +785,7 @@ export function openProviderBridge({
           toolFailureObserved: e.toolFailureObserved,
           logicalTaskId: e.logicalTaskId,
           delegationId: e.delegationId,
+          parentExecution: e.parentExecution ?? null,
           status: e.status,
           tool: e.tool,
           activeToolCount: Object.keys(e.activeTools).length,

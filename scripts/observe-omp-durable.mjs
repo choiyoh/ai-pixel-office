@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { observeOmp } from "../platform/observe-omp.mjs";
 import { openOmpOutbox } from "../platform/omp-outbox.mjs";
 import { stateRoot } from "../platform/runtime.mjs";
+import { findClaudeExecution } from "../platform/claude-execution.mjs";
 const args = process.argv.slice(2);
 if (args[0] === "--") args.shift();
 let size = 0;
@@ -102,6 +103,9 @@ if (!process.exitCode) {
       cwd: process.cwd(),
       input: Buffer.concat(chunks),
       transport,
+      // Read-only ancestry proof of the delegating Claude process, when this
+      // run is a descendant of one. Absent for independent launches.
+      parentExecution: findClaudeExecution(),
       onOutput: (text) => process.stdout.write(text ? text + "\n" : ""),
     });
     process.exitCode = result.exitCode ?? 1;

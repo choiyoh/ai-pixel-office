@@ -35,7 +35,13 @@ const fail = () => {
 // An explicit allowlist boundary: never return the original intake object.
 export function projectOmpOffice(
   raw,
-  { installationInstanceId, environment, source, now = Date.now() } = {},
+  {
+    installationInstanceId,
+    environment,
+    source,
+    now = Date.now(),
+    resolveDelegation = null,
+  } = {},
 ) {
   if (
     !uuid(installationInstanceId) ||
@@ -115,6 +121,33 @@ export function projectOmpOffice(
       !["commandcode", "deepseek", "other", "unknown"].includes(a.modelProvider)
     )
       fail();
+    const proof = a.parentExecution ?? null;
+    if (
+      proof !== null &&
+      (!object(proof) ||
+        Object.keys(proof).sort().join() !== "birth,pid,version" ||
+        proof.version !== 1 ||
+        !Number.isSafeInteger(proof.pid) ||
+        proof.pid <= 1 ||
+        typeof proof.birth !== "string" ||
+        proof.birth.length < 1 ||
+        proof.birth.length > 80 ||
+        !/^[A-Za-z0-9 .:+-]+$/.test(proof.birth))
+    )
+      fail();
+    // The raw ancestry proof never leaves the server: only a resolved display
+    // label is projected, and only when the verifier recognized it.
+    let delegatedBy = null;
+    if (proof !== null && typeof resolveDelegation === "function") {
+      const match = resolveDelegation(proof);
+      if (
+        match &&
+        object(match) &&
+        typeof match.name === "string" &&
+        /^Claude · [0-9]{3}$/.test(match.name)
+      )
+        delegatedBy = { name: match.name };
+    }
     const history = events
       .filter((e) => e.actorId === a.actorId && e.generation === a.generation)
       .sort((x, y) => x.revision - y.revision);
@@ -136,6 +169,7 @@ export function projectOmpOffice(
       receivedAt: a.lastReceivedAt,
       restored: a.lastObservedAt === null,
       quality: a.quality,
+      delegatedBy,
       modelFamily: a.modelFamily,
       modelProvider: a.modelProvider,
     };

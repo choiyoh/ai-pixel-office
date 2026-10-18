@@ -40,7 +40,7 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
  app.get('/api/live/events',async(request,reply)=>receiver?receiver.changes(request.query.after):reply.code(409).send({ready:false,error:'receiver-not-prepared'}));
  app.get('/api/omp/snapshot',async(request,reply)=>{
   if(!receiver)return reply.code(409).send({ready:false,error:'receiver-not-prepared'});
-  try{return await readOmpOffice({directory:path.join(stateDir??getStateRoot(),'provider-bridge-omp'),source,environment:`${runtimeInfo().platform}/${runtimeInfo().arch}${runtimeInfo().wsl?' · WSL':''}`});}catch(e){return reply.code(e.statusCode===409?409:503).send({ready:false,error:e.statusCode===409?'omp-unprepared':'omp-unavailable'});}
+  try{return await readOmpOffice({directory:path.join(stateDir??getStateRoot(),'provider-bridge-omp'),source,environment:`${runtimeInfo().platform}/${runtimeInfo().arch}${runtimeInfo().wsl?' · WSL':''}`,resolveDelegation:proof=>receiver?.matchExecution(proof)??null});}catch(e){return reply.code(e.statusCode===409?409:503).send({ready:false,error:e.statusCode===409?'omp-unprepared':'omp-unavailable'});}
  });
  app.get('/api/omp/outbox',async(request,reply)=>{
   try{return {ready:true,...readOmpOutboxStatus({directory:path.join(stateDir??getStateRoot(),'omp-outbox'),bridgeDirectory:path.join(stateDir??getStateRoot(),'provider-bridge-omp')})};}catch{return reply.code(503).send({ready:false,error:'omp-outbox-unavailable'});}

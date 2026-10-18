@@ -46,6 +46,7 @@ export function makeReceiver({source='live',maxSessions=100}={}){
    try{return await operation;}finally{queued--;}
   },
   liveSnapshot(){if(!projection)throw Error('receiver not ready');return projection.snapshot();},
+  matchExecution(proof){if(!projection)return null;try{return projection.matchExecution(proof);}catch{return null;}},
   changes(cursor){if(!projection)throw Error('receiver not ready');return projection.changes(cursor);},
   snapshot(){
    const data=projection?.snapshot();

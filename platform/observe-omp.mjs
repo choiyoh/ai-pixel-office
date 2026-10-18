@@ -82,6 +82,7 @@ export async function observeOmp({
   transport = null,
   env = process.env,
   launcherPrefix = [],
+  parentExecution = null,
   onOutput,
   signal,
   maxLineBytes = 1024 * 1024,
@@ -115,6 +116,7 @@ export async function observeOmp({
     logicalTaskId: randomUUID(),
     nativeSessionId: null,
     startSource: "startup",
+    parentExecution: parentExecution ?? null,
     modelFamily: "unknown",
     modelProvider: "unknown",
   };

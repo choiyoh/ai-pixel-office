@@ -113,6 +113,17 @@ export function openLiveProjection({directory,source='live',environment='local',
    const revision=/^(0|[1-9][0-9]*)$/.test(raw)?Number(raw):-1;
    const resetRequired=!Number.isSafeInteger(revision)||revision<0||revision>state.revision||revision<(deltas[0]?.revision??state.revision+1)-1;
    return {ready:true,epoch,revision:state.revision,cursor:cursor(),source,receivedAt:now(),resetRequired,deltas:resetRequired?[]:deltas.filter(d=>d.revision>revision)};
+  },
+  // Verified-relay lookup. The proof is compared through the same HMAC the
+  // receiver already applied to live Claude executions; raw OS identifiers
+  // are never returned.
+  matchExecution(proof){
+   check();
+   if(!proof||typeof proof!=='object'||Array.isArray(proof)||Object.keys(proof).sort().join()!=='birth,pid,version'||proof.version!==1||!Number.isSafeInteger(proof.pid)||proof.pid<=1||typeof proof.birth!=='string'||proof.birth.length<1||proof.birth.length>80)return null;
+   const executionKey=createHmac('sha256',state.salt).update(JSON.stringify([process.platform,proof.pid,proof.birth])).digest('hex');
+   const record=state.records.find(r=>r.executionKey===executionKey||r.retiredExecutions.includes(executionKey));
+   if(!record||!record.actor)return null;
+   return {name:`Claude · ${String(record.actor.renderId).padStart(3,'0')}`,recordKey:record.key};
   }
  };
 }

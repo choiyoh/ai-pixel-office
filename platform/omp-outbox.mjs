@@ -87,7 +87,8 @@ function canonical(event, b) {
     (e.kind === "session.start" && e.startSource !== "startup") ||
     !hex(e.nativeSessionId) ||
     e.parentTaskId !== undefined ||
-    e.delegationId !== undefined
+    e.delegationId !== undefined ||
+    (e.parentExecution !== undefined && e.kind !== "session.start")
   )
     fail();
   return e;

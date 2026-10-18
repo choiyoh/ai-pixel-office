@@ -29,6 +29,7 @@ const keys = [
   "modelFamily",
   "modelProvider",
   "toolFailed",
+  "parentExecution",
 ];
 export const uuid = (v) =>
   typeof v === "string" &&
@@ -101,6 +102,24 @@ export function parseBridgeEvent(value, principal) {
   if (value.kind === "session.start") {
     if (!["startup", "resume", "clear"].includes(value.startSource)) fail();
   } else if (value.startSource !== undefined) fail();
+  if (value.parentExecution !== undefined) {
+    const p = value.parentExecution;
+    if (
+      value.kind !== "session.start" ||
+      !p ||
+      typeof p !== "object" ||
+      Array.isArray(p) ||
+      Object.keys(p).sort().join() !== "birth,pid,version" ||
+      p.version !== 1 ||
+      !Number.isSafeInteger(p.pid) ||
+      p.pid <= 1 ||
+      typeof p.birth !== "string" ||
+      p.birth.length < 1 ||
+      p.birth.length > 80 ||
+      !/^[A-Za-z0-9 .:+-]+$/.test(p.birth)
+    )
+      fail();
+  }
   if (value.kind === "execution.end") {
     if (
       !["exited-zero", "exited-nonzero", "signalled"].includes(
