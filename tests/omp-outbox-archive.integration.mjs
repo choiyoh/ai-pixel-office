@@ -128,7 +128,7 @@ test("delivered runs move to the private archive while pending, live-writer and 
     const report = f.archive(true);
     assert.equal(report.enabled, true);
     assert.deepEqual(report.archivedRuns, ["run-0000"]);
-    assert.ok(report.archiveDirectory.startsWith("archive/"));
+    assert.ok(report.archiveDirectory.startsWith("archive"));
     const target = path.join(f.directory, report.archiveDirectory, "run-0000");
     assert.equal(fs.existsSync(target), true);
     // Nothing is deleted: the canonical records and completion marker remain.
