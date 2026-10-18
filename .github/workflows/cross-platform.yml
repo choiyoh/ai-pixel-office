@@ -41,6 +41,7 @@ jobs:
       - run: npm run test:live-browser
       - run: npm run test:p2a4-browser
       - run: npm run test:omp-office-browser
+      - run: npm run test:omp-outbox-browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:

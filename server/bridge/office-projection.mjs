@@ -66,6 +66,7 @@ export function projectOmpOffice(
         e.generation < 1 ||
         !kindMap.has(e.kind) ||
         !date(e.receivedAt) ||
+        (e.occurredAt !== undefined && !date(e.occurredAt)) ||
         (e.tool !== null && !toolMap.has(e.tool))
       )
         fail();
@@ -87,7 +88,7 @@ export function projectOmpOffice(
         kind,
         status,
         tool: e.tool === null ? null : toolMap.get(e.tool),
-        at: e.receivedAt,
+        at: e.occurredAt ?? e.receivedAt,
       };
     });
   if (new Set(events.map((e) => e.revision)).size !== events.length) fail();
@@ -106,6 +107,9 @@ export function projectOmpOffice(
       !statuses.includes(a.status) ||
       !qualities.includes(a.quality) ||
       !date(a.lastReceivedAt) ||
+      (a.lastObservedAt !== undefined &&
+        a.lastObservedAt !== null &&
+        !date(a.lastObservedAt)) ||
       (a.tool !== null && !toolMap.has(a.tool)) ||
       !["deepseek", "other", "unknown"].includes(a.modelFamily) ||
       !["commandcode", "deepseek", "other", "unknown"].includes(a.modelProvider)
@@ -128,8 +132,9 @@ export function projectOmpOffice(
       kind: history.at(-1)?.kind ?? "sessionStart",
       lastTool: a.tool === null ? null : toolMap.get(a.tool),
       observedAt: history[0]?.at ?? a.lastReceivedAt,
-      lastEventAt: a.lastReceivedAt,
-      restored: false,
+      lastEventAt: a.lastObservedAt ?? a.lastReceivedAt,
+      receivedAt: a.lastReceivedAt,
+      restored: a.lastObservedAt === null,
       quality: a.quality,
       modelFamily: a.modelFamily,
       modelProvider: a.modelProvider,

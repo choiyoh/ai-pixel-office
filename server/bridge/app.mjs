@@ -125,6 +125,28 @@ export async function createProviderBridgeApp({
     }
     return bridge.receive(request.body, target);
   });
+  app.post("/api/bridge/:providerId/batch", (request, reply) => {
+    const target = principals.get(request.params.providerId);
+    if (!target) return reply.code(404).send({ error: "unknown-provider" });
+    if (!equal(request.headers.authorization ?? "", `Bearer ${target.token}`))
+      return reply.code(401).send({ error: "unauthorized" });
+    const body = request.body;
+    if (
+      !body ||
+      Object.keys(body).join() !== "events" ||
+      !Array.isArray(body.events) ||
+      body.events.length < 1 ||
+      body.events.length > 64
+    )
+      return reply.code(422).send({ error: "invalid-batch" });
+    // Independent durable receipts; a crash or later rejection can leave a
+    // committed prefix. Retrying exactly the same IDs is safe in that case.
+    const receipts = body.events.map((event) => ({
+      ...bridge.receive(event, target),
+      eventId: event.eventId,
+    }));
+    return { accepted: true, receipts };
+  });
   app.addHook("onClose", async () => {
     for (const { file, token } of owned)
       try {

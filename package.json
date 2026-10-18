@@ -26,7 +26,9 @@
     "test:p2a4-browser": "node scripts/p2a4-browser.mjs",
     "doctor:command-code": "node scripts/command-code-doctor.mjs",
     "bridge:start": "node scripts/provider-bridge.mjs",
-    "test:omp-office-browser": "node scripts/omp-office-browser.mjs"
+    "test:omp-office-browser": "node scripts/omp-office-browser.mjs",
+    "omp:replay": "node scripts/replay-omp-outbox.mjs",
+    "test:omp-outbox-browser": "node scripts/omp-outbox-browser.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.2",

@@ -174,7 +174,10 @@ test("OMP sequence quality freezes animation, recovery baselines skip old action
   const failedBatch = new LiveAnimationScheduler();
   failedBatch.baseline({ ...snapshot, revision: 1 });
   failedBatch.observe(failed, f.options.now + 100, true);
-  assert.equal(failedBatch.visual(failed.actors[0], f.options.now + 100, true), null);
+  assert.equal(
+    failedBatch.visual(failed.actors[0], f.options.now + 100, true),
+    null,
+  );
   const gap = parseSnapshot(
     projectOmpOffice(
       { ...f.raw, actors: [{ ...f.raw.actors[0], quality: "sequence-gap" }] },
@@ -190,4 +193,30 @@ test("OMP sequence quality freezes animation, recovery baselines skip old action
     scheduler.visual(snapshot.actors[0], f.options.now + 200, true),
     null,
   );
+});
+
+test("delayed observations retain their original age and never start a new animation at delivery time", () => {
+  const f = fixture(),
+    old = new Date(f.options.now - 10000).toISOString();
+  const raw = {
+    ...f.raw,
+    actors: [{ ...f.raw.actors[0], lastObservedAt: old }],
+    timeline: f.raw.timeline.map((e) => ({ ...e, occurredAt: old })),
+  };
+  const snapshot = parseSnapshot(projectOmpOffice(raw, f.options));
+  assert.equal(snapshot.actors[0].lastEventAt, old);
+  assert.equal(snapshot.actors[0].receivedAt, f.raw.actors[0].lastReceivedAt);
+  assert.ok(snapshot.timeline.every((e) => e.at === old));
+  const scheduler = new LiveAnimationScheduler();
+  scheduler.baseline({ ...snapshot, revision: 0, timeline: [] });
+  scheduler.observe(snapshot, f.options.now, true);
+  assert.equal(scheduler.visual(snapshot.actors[0], f.options.now, true), null);
+  const unknown = parseSnapshot(
+    projectOmpOffice(
+      { ...f.raw, actors: [{ ...f.raw.actors[0], lastObservedAt: null }] },
+      f.options,
+    ),
+  );
+  assert.equal(unknown.actors[0].restored, true);
+  assert.equal(freshness(unknown.actors[0], f.options.now), "stale");
 });

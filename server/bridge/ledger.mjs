@@ -170,6 +170,7 @@ export function openProviderBridge({
           "status",
           "tool",
           "lastReceivedAt",
+          "lastObservedAt",
           "pending",
           "generation",
           "processOutcome",
@@ -212,6 +213,7 @@ export function openProviderBridge({
         !statuses.includes(e.status) ||
         !(e.tool === null || bridgeTools.includes(e.tool)) ||
         !date(e.lastReceivedAt) ||
+        (e.lastObservedAt !== undefined && !date(e.lastObservedAt)) ||
         !Array.isArray(e.pending) ||
         e.pending.length > maxPendingPerExecution ||
         !e.pending.every(safePending) ||
@@ -307,6 +309,7 @@ export function openProviderBridge({
           "tool",
           "sequence",
           "receivedAt",
+          "occurredAt",
           "logicalTaskId",
           "delegationId",
           "processOutcome",
@@ -324,6 +327,7 @@ export function openProviderBridge({
         !Number.isSafeInteger(t.sequence) ||
         t.sequence < 1 ||
         !date(t.receivedAt) ||
+        (t.occurredAt !== undefined && !date(t.occurredAt)) ||
         !uuid(t.logicalTaskId) ||
         !(t.delegationId === null || uuid(t.delegationId)) ||
         !(
@@ -547,6 +551,7 @@ export function openProviderBridge({
 
     e.nextSequence++;
     e.lastReceivedAt = item.receivedAt;
+    e.lastObservedAt = item.occurredAt;
     s.timeline.push({
       revision: s.revision,
       actorId: sess?.actorId ?? null,
@@ -557,6 +562,7 @@ export function openProviderBridge({
       tool: item.tool ?? null,
       sequence: item.sequence,
       receivedAt: item.receivedAt,
+      occurredAt: item.occurredAt,
       logicalTaskId: e.logicalTaskId,
       delegationId: e.delegationId,
       processOutcome:
@@ -744,6 +750,7 @@ export function openProviderBridge({
           activeToolCount: Object.keys(e.activeTools).length,
           quality,
           lastReceivedAt: e.lastReceivedAt,
+          lastObservedAt: e.lastObservedAt ?? null,
         });
       }
       return {

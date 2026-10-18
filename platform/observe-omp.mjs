@@ -102,7 +102,8 @@ export async function observeOmp({
     deliveryErrors: 0,
     observationOverflow: false,
     rawOutputStored: false,
-    producerReplayImplemented: false,
+    producerReplayImplemented: transport?.durable === true,
+    durablyQueued: 0,
     stderrSeen: false,
     observedKinds: [],
     protocolErrors: [],
@@ -145,9 +146,14 @@ export async function observeOmp({
       }
       try {
         const ack = await transport.send(event);
-        if (ack?.accepted !== true || ack.disposition !== "committed")
+        if (
+          ack?.accepted !== true ||
+          (ack.disposition !== "committed" &&
+            !(transport.durable === true && ack.disposition === "queued"))
+        )
           throw Error("not committed");
-        result.sent++;
+        if (ack.disposition === "queued") result.durablyQueued++;
+        else result.sent++;
       } catch {
         result.deliveryErrors++;
         disabled = true;
