@@ -4,7 +4,7 @@ export const liveKinds=['sessionStart','sessionEnd','toolStart','toolEnd','permi
 export const liveTools=['Read','Grep','Glob','Edit','Write','Bash','WebFetch','WebSearch','Agent','Task','AskUserQuestion','Other'] as const;
 export type LiveTool=typeof liveTools[number];
 export type LiveSource='live'|'fixture';
-export interface LiveActor {actorId:string;renderId:number;palette:number;generation:number;providerId:'claude'|'omp';quality?:'contiguous'|'inconsistent-tools'|'sequence-gap'|'gap-expired';modelFamily?:'deepseek'|'other'|'unknown';modelProvider?:'commandcode'|'deepseek'|'other'|'unknown';installationInstanceId:string;source:LiveSource;environment:string;name:string;status:LiveStatus;kind:typeof liveKinds[number];lastTool:LiveTool|null;observedAt:string;lastEventAt:string;receivedAt?:string;restored:boolean;delegatedBy?:{name:string}|null}
+export interface LiveActor {actorId:string;renderId:number;palette:number;generation:number;providerId:'claude'|'omp';quality?:'contiguous'|'inconsistent-tools'|'sequence-gap'|'gap-expired';modelFamily?:'deepseek'|'other'|'unknown';modelProvider?:'commandcode'|'deepseek'|'other'|'unknown';installationInstanceId:string;source:LiveSource;environment:string;name:string;status:LiveStatus;kind:typeof liveKinds[number];lastTool:LiveTool|null;observedAt:string;lastEventAt:string;receivedAt?:string;restored:boolean;delegatedBy?:{name:string;sceneId?:number|null}|null}
 export interface LiveEvent {revision:number;actorId:string;kind:typeof liveKinds[number];status:LiveStatus|'session-ended';at:string;generation?:number;tool?:LiveTool|null}
 export interface Tombstone {actorId:string|null;generation?:number;endedAt:string}
 export interface LiveSnapshot {ready:true;providerId?:'claude'|'omp';epoch:string;revision:number;cursor:string;source:LiveSource;installationInstanceId:string;receivedAt:string;lastEventAt:string|null;actors:LiveActor[];tombstones:Tombstone[];timeline:LiveEvent[]}
@@ -32,6 +32,46 @@ export function parseSnapshot(v:unknown):LiveSnapshot{
 export function parseChanges(v:unknown):LiveChanges{
  if(!envelope(v)||typeof v.resetRequired!=='boolean'||!Array.isArray(v.deltas)||v.deltas.length>128||!v.deltas.every(d=>object(d)&&integer(d.revision)&&(d.upsert===null||actor(d.upsert))&&(d.tombstone===null||tomb(d.tombstone))&&(d.event===null||event(d.event))))throw Error('Invalid live changes');
  return v as unknown as LiveChanges;
+}
+// Concurrent provider scene: the two channels keep their own names and
+// palettes; only the engine key space is namespaced by the server. Name
+// validation therefore checks the provider prefix, not the key-derived suffix.
+const sceneActor=(v:unknown):v is LiveActor=>{
+ if(!object(v))return false;
+ if(!uuid(v.actorId)||!integer(v.renderId)||v.renderId<=0)return false;
+ if(!integer(v.palette)||v.palette>=6)return false;
+ if(!integer(v.generation)||v.generation<=0)return false;
+ if(v.providerId!=='claude'&&v.providerId!=='omp')return false;
+ if(!uuid(v.installationInstanceId)||!source(v.source))return false;
+ if(!member(liveStatuses,v.status)||!member(liveKinds,v.kind))return false;
+ if(!(v.lastTool===null||member(liveTools,v.lastTool)))return false;
+ if(!timestamp(v.observedAt)||!timestamp(v.lastEventAt))return false;
+ if(!(v.receivedAt===undefined||timestamp(v.receivedAt)))return false;
+ if(typeof v.restored!=='boolean'||typeof v.environment!=='string')return false;
+ if(!/^(linux|darwin|win32)\/(x64|arm64)( · WSL)?$/.test(v.environment))return false;
+ const prefix=v.providerId==='omp'?'OMP · ':'Claude · ';
+ if(typeof v.name!=='string'||!v.name.startsWith(prefix))return false;
+ if(v.providerId==='omp'&&!(member(['contiguous','inconsistent-tools','sequence-gap','gap-expired'],v.quality)&&member(['deepseek','other','unknown'],v.modelFamily)&&member(['commandcode','deepseek','other','unknown'],v.modelProvider)))return false;
+ if(v.delegatedBy!==undefined&&v.delegatedBy!==null){if(!object(v.delegatedBy))return false;const keys=Object.keys(v.delegatedBy);if(keys.some(k=>k!=='name'&&k!=='sceneId'))return false;if(typeof v.delegatedBy.name!=='string'||!/^Claude · [0-9]{3}$/.test(v.delegatedBy.name))return false;if(!(v.delegatedBy.sceneId===undefined||v.delegatedBy.sceneId===null||(integer(v.delegatedBy.sceneId)&&v.delegatedBy.sceneId>0)))return false;}
+ return true;
+};
+const sceneEvent=(v:unknown):LiveEvent|null=>{
+ if(!object(v)||!uuid(v.actorId)||!member(liveKinds,v.kind)||!timestamp(v.at))return null;
+ return {revision:integer(v.order)&&v.order>0?v.order:1,actorId:v.actorId,kind:v.kind,status:member(liveStatuses,v.status)?v.status:'unknown',at:v.at,tool:member(liveTools,v.tool)?v.tool:undefined};
+};
+export function parseSceneSnapshot(v:unknown):LiveSnapshot{
+ if(!object(v)||v.ready!==true)throw Error('Invalid scene snapshot');
+ if(!uuid(v.installationInstanceId))throw Error('Invalid scene installation');
+ if(!source(v.source)||typeof v.epoch!=='string'||!v.epoch.includes('|'))throw Error('Invalid scene epoch');
+ if(!timestamp(v.receivedAt)||!(v.lastEventAt===null||v.lastEventAt===undefined||timestamp(v.lastEventAt)))throw Error('Invalid scene time');
+ const revision=typeof v.revision==='string'?/^c(\d+)\.o(\d+)$/.exec(v.revision):null;
+ if(!revision)throw Error('Invalid scene revision');
+ if(!Array.isArray(v.actors)||v.actors.length>200||!v.actors.every(sceneActor))throw Error('Invalid scene actors');
+ if(!Array.isArray(v.timeline)||v.timeline.length>100)throw Error('Invalid scene timeline');
+ const actors=v.actors as LiveActor[];
+ const events=(v.timeline as unknown[]).map(sceneEvent).filter((e):e is LiveEvent=>e!==null);
+ if(new Set(actors.map(a=>a.actorId)).size!==actors.length||new Set(actors.map(a=>a.renderId)).size!==actors.length)throw Error('Invalid scene namespace');
+ return {ready:true,epoch:v.epoch as string,revision:Number(revision[1])*1000000+Number(revision[2]),cursor:`${v.epoch}:${v.revision}`,source:v.source,installationInstanceId:v.installationInstanceId,receivedAt:v.receivedAt as string,lastEventAt:(v.lastEventAt??null) as string|null,actors,tombstones:[],timeline:[...new Map(events.map(e=>[`${e.actorId}:${e.revision}`,e])).values()].slice(0,100)};
 }
 export function applySnapshot(previous:LiveSnapshot|null,next:LiveSnapshot):LiveSnapshot{
  if(previous?.epoch===next.epoch&&(previous.providerId??'claude')!==(next.providerId??'claude'))throw Error('Live provider changed within epoch');
@@ -61,6 +101,15 @@ export function applyChanges(current:LiveSnapshot,response:LiveChanges):LiveSnap
 }
 export function freshness(actor:LiveActor,now:number,transportOffline=false){return transportOffline||now-Date.parse(actor.lastEventAt)>120000?'offline':actor.restored||(actor.quality!==undefined&&actor.quality!=='contiguous')||now-Date.parse(actor.lastEventAt)>30000?'stale':'fresh';}
 export interface OmpOutboxStatus{prepared:boolean;enrolled:boolean;pending:number;retainedRuns:number;capacityRemaining:number;blockedRuns:number;installationMismatch:boolean;registry:'missing'|'alive'|'stale';writers:{run:string;pid:number;alive:boolean}[];lastRejection:{at:string;statusCode:number}|null;recoveryRequired:boolean}
+export interface SceneNotice{providerId:'claude'|'omp';reason:string}
+export function parseSceneNotices(v:unknown):SceneNotice[]{
+ if(!object(v)||!Array.isArray(v.notices))return [];
+ return (v.notices as unknown[]).flatMap(n=>{
+  if(!object(n)||(n.providerId!=='claude'&&n.providerId!=='omp'))return [];
+  if(typeof n.reason!=='string'||n.reason.length<1||n.reason.length>64||!/^[a-z0-9-]+$/.test(n.reason))return [];
+  return [{providerId:n.providerId as 'claude'|'omp',reason:n.reason}];
+ });
+}
 export function parseOmpOutboxStatus(v:unknown):OmpOutboxStatus{
  if(!object(v)||typeof v.prepared!=='boolean'||typeof v.enrolled!=='boolean')throw Error('Invalid OMP outbox status');
  if(!integer(v.pending)||!integer(v.retainedRuns)||!integer(v.capacityRemaining)||v.capacityRemaining>1024||!integer(v.blockedRuns)||typeof v.installationMismatch!=='boolean'||typeof v.recoveryRequired!=='boolean')throw Error('Invalid OMP outbox counts');

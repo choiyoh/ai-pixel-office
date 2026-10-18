@@ -11,8 +11,8 @@ import {ModeSwitch} from './ModeSwitch';
 
 export function App(){
  const [mode,setMode]=useState<'mock'|'live'>(()=>{try{return localStorage.getItem('orbit.mode.v1')==='live'?'live':'mock';}catch{return 'mock';}});
- const [channel,setChannel]=useState<'claude'|'omp'>(()=>{try{return localStorage.getItem('orbit.live.channel.v1')==='omp'?'omp':'claude';}catch{return 'claude';}});
- const changeChannel=(next:'claude'|'omp')=>{setChannel(next);try{localStorage.setItem('orbit.live.channel.v1',next);}catch{ /* channel remains usable */ }};
+ const [channel,setChannel]=useState<'claude'|'omp'|'scene'>(()=>{try{const saved=localStorage.getItem('orbit.live.channel.v1');return saved==='omp'?'omp':saved==='scene'?'scene':'claude';}catch{return 'claude';}});
+ const changeChannel=(next:'claude'|'omp'|'scene')=>{setChannel(next);try{localStorage.setItem('orbit.live.channel.v1',next);}catch{ /* channel remains usable */ }};
  const changeMode=(next:'mock'|'live')=>{setMode(next);try{localStorage.setItem('orbit.mode.v1',next);}catch{ /* mode still works without storage */ }};
  return <><MockOffice active={mode==='mock'} onMode={changeMode}/><LiveOffice key={channel} active={mode==='live'} onMode={changeMode} channel={channel} onChannel={changeChannel}/></>;
 }

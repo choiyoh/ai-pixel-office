@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {makeReceiver} from './receiver.mjs';
 import {readOmpOffice} from '../platform/omp-office-reader.mjs';
+import {projectScene} from './scene-projection.mjs';
 import {readOmpOutboxStatus} from '../platform/omp-outbox.mjs';
 
 export async function createApp({mode='mock',source='live',stateDir,environment=runtimeInfo().environment}={}){
@@ -24,7 +25,7 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
   if(request.method==='GET'&&(request.url==='/'||request.url.startsWith('/?'))){reply.header('set-cookie',`orbit_session=${cookieSecret}; HttpOnly; SameSite=Strict; Path=/`);}
   reply.header('x-content-type-options','nosniff');reply.header('referrer-policy','no-referrer');
   if(request.url.startsWith('/api/'))reply.header('cache-control','no-store');
-  if(['/api/connection','/api/events','/api/live/snapshot','/api/live/events','/api/omp/snapshot','/api/omp/outbox'].includes(request.routeOptions.url)){
+  if(['/api/connection','/api/events','/api/live/snapshot','/api/live/events','/api/omp/snapshot','/api/omp/outbox','/api/scene/snapshot'].includes(request.routeOptions.url)){
    const candidate=(request.headers.cookie??'').split(';').map(s=>s.trim()).find(s=>s.startsWith('orbit_session='))?.slice(14)??'';
    const a=Buffer.from(candidate),b=Buffer.from(cookieSecret);
    if(a.length!==b.length||!timingSafeEqual(a,b))return reply.code(401).send({error:'local-session-required'});
@@ -41,6 +42,13 @@ export async function createApp({mode='mock',source='live',stateDir,environment=
  app.get('/api/omp/snapshot',async(request,reply)=>{
   if(!receiver)return reply.code(409).send({ready:false,error:'receiver-not-prepared'});
   try{return await readOmpOffice({directory:path.join(stateDir??getStateRoot(),'provider-bridge-omp'),source,environment:`${runtimeInfo().platform}/${runtimeInfo().arch}${runtimeInfo().wsl?' · WSL':''}`,resolveDelegation:proof=>receiver?.matchExecution(proof)??null});}catch(e){return reply.code(e.statusCode===409?409:503).send({ready:false,error:e.statusCode===409?'omp-unprepared':'omp-unavailable'});}
+ });
+ app.get('/api/scene/snapshot',async(request,reply)=>{
+  const claude=(()=>{try{return receiver?receiver.liveSnapshot():{ready:false,error:'receiver-not-prepared'};}catch{return {ready:false,error:'claude-unavailable'};}})();
+  let omp=null;
+  try{omp=await readOmpOffice({directory:path.join(stateDir??getStateRoot(),'provider-bridge-omp'),source,environment:`${runtimeInfo().platform}/${runtimeInfo().arch}${runtimeInfo().wsl?' · WSL':''}`,resolveDelegation:proof=>receiver?.matchExecution(proof)??null});}
+  catch(e){omp={ready:false,error:e.statusCode===409?'omp-unprepared':'omp-unavailable'};}
+  try{return projectScene({claude,omp,source,environment:`${runtimeInfo().platform}/${runtimeInfo().arch}${runtimeInfo().wsl?' · WSL':''}`});}catch{return reply.code(503).send({ready:false,error:'scene-unavailable'});}
  });
  app.get('/api/omp/outbox',async(request,reply)=>{
   try{return {ready:true,...readOmpOutboxStatus({directory:path.join(stateDir??getStateRoot(),'omp-outbox'),bridgeDirectory:path.join(stateDir??getStateRoot(),'provider-bridge-omp')})};}catch{return reply.code(503).send({ready:false,error:'omp-outbox-unavailable'});}

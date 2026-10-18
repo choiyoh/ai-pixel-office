@@ -146,7 +146,10 @@ export function projectOmpOffice(
         typeof match.name === "string" &&
         /^Claude · [0-9]{3}$/.test(match.name)
       )
-        delegatedBy = { name: match.name };
+        delegatedBy =
+          Number.isSafeInteger(match.renderId) && match.renderId > 0
+            ? { name: match.name, renderId: match.renderId }
+            : { name: match.name };
     }
     const history = events
       .filter((e) => e.actorId === a.actorId && e.generation === a.generation)

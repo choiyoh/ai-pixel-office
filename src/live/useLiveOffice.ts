@@ -1,25 +1,34 @@
 import {useEffect,useRef,useState} from 'react';
-import {applyChanges,applySnapshot,parseChanges,parseSnapshot,type LiveSnapshot} from './store';
-export function useLiveOffice(active:boolean,channel:'claude'|'omp'='claude'){
+import {applyChanges,applySnapshot,parseChanges,parseSceneNotices,parseSceneSnapshot,parseSnapshot,type LiveSnapshot,type SceneNotice} from './store';
+export type LiveChannel='claude'|'omp'|'scene';
+export function useLiveOffice(active:boolean,channel:LiveChannel='claude'){
  const resyncRevision=useRef(0),savedSnapshot=useRef<LiveSnapshot|null>(null);
- const [view,setView]=useState<{snapshot:LiveSnapshot|null;connection:'checking'|'ready'|'offline'|'unprepared';resync:number}>({snapshot:null,connection:'checking',resync:0});
+ const [view,setView]=useState<{snapshot:LiveSnapshot|null;connection:'checking'|'ready'|'offline'|'unprepared';resync:number;notices:SceneNotice[]}>({snapshot:null,connection:'checking',resync:0,notices:[]});
  useEffect(()=>{
   if(!active)return;
-  let disposed=false,timer:ReturnType<typeof setTimeout>,current:LiveSnapshot|null=null,lastKnown:LiveSnapshot|null=channel==='omp'?savedSnapshot.current:null,resync=resyncRevision.current,recovering=false;
+  let disposed=false,timer:ReturnType<typeof setTimeout>,current:LiveSnapshot|null=null,lastKnown:LiveSnapshot|null=channel==='claude'?null:savedSnapshot.current,resync=resyncRevision.current,recovering=false;
   const controller=new AbortController();
   const read=async(url:string)=>{
    const response=await fetch(url,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(6000)]),cache:'no-store'});
-   if(response.status===409){if(channel==='omp'&&lastKnown)throw Error('OMP bridge disconnected');if(!disposed)setView({snapshot:null,connection:'unprepared',resync});return null;}
+   if(response.status===409){if(channel==='omp'&&lastKnown)throw Error('OMP bridge disconnected');if(!disposed)setView({snapshot:null,connection:'unprepared',resync,notices:[]});return null;}
    if(!response.ok)throw Error('Live unavailable');return response.json() as Promise<unknown>;
   };
   const refresh=async()=>{
    try{
+    if(channel==='scene'){
+     const raw=await read('/api/scene/snapshot');if(disposed)return;if(raw===null){current=null;recovering=true;return;}
+     const notices=parseSceneNotices(raw);
+     const next=parseSceneSnapshot(raw);
+     if(!current||recovering||current.epoch!==next.epoch)resync=++resyncRevision.current;
+     current=applySnapshot(current??lastKnown,next);recovering=false;
+     lastKnown=current;savedSnapshot.current=current;setView({snapshot:current,connection:'ready',resync,notices});return;
+    }
     if(channel==='omp'){
      const raw=await read('/api/omp/snapshot');if(disposed)return;if(raw===null){current=null;recovering=true;return;}
      const next=parseSnapshot(raw);if(next.providerId!=='omp'||next.actors.some(a=>a.providerId!=='omp'))throw Error('Invalid OMP channel');
      if(!current||recovering||current.epoch!==next.epoch)resync=++resyncRevision.current;
      current=applySnapshot(current??lastKnown,next);recovering=false;
-     lastKnown=current;savedSnapshot.current=current;setView({snapshot:current,connection:'ready',resync});return;
+     lastKnown=current;savedSnapshot.current=current;setView({snapshot:current,connection:'ready',resync,notices:[]});return;
     }
     if(current){
      const raw=await read(`/api/live/events?after=${encodeURIComponent(current.cursor)}`);if(disposed)return;
@@ -27,7 +36,7 @@ export function useLiveOffice(active:boolean,channel:'claude'|'omp'='claude'){
      current=applyChanges(current,parseChanges(raw));
     }
     if(!current){resync=++resyncRevision.current;const raw=await read('/api/live/snapshot');if(disposed)return;if(raw===null)return;current=applySnapshot(lastKnown,parseSnapshot(raw));}
-    if(!disposed){lastKnown=current;setView({snapshot:current,connection:'ready',resync});}
+    if(!disposed){lastKnown=current;setView({snapshot:current,connection:'ready',resync,notices:[]});}
    }catch{recovering=true;if(!disposed)setView(previous=>({...previous,connection:'offline'}));}
    finally{if(!disposed)timer=setTimeout(()=>void refresh(),1000);}
   };

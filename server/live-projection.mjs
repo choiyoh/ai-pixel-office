@@ -123,7 +123,7 @@ export function openLiveProjection({directory,source='live',environment='local',
    const executionKey=createHmac('sha256',state.salt).update(JSON.stringify([process.platform,proof.pid,proof.birth])).digest('hex');
    const record=state.records.find(r=>r.executionKey===executionKey||r.retiredExecutions.includes(executionKey));
    if(!record||!record.actor)return null;
-   return {name:`Claude · ${String(record.actor.renderId).padStart(3,'0')}`,recordKey:record.key};
+   return {name:`Claude · ${String(record.actor.renderId).padStart(3,'0')}`,renderId:record.actor.renderId,recordKey:record.key};
   }
  };
 }

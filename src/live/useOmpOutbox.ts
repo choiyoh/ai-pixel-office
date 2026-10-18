@@ -1,9 +1,9 @@
 import {useEffect,useState} from 'react';
 import {parseOmpOutboxStatus,type OmpOutboxStatus} from './store';
-export function useOmpOutbox(active:boolean,channel:'claude'|'omp'){
+export function useOmpOutbox(active:boolean,channel:'claude'|'omp'|'scene'){
  const [status,setStatus]=useState<OmpOutboxStatus|null>(null);
  useEffect(()=>{
-  if(!active||channel!=='omp'){setStatus(null);return;}
+  if(!active||channel==='claude'){setStatus(null);return;}
   let disposed=false,timer:ReturnType<typeof setTimeout>;
   const controller=new AbortController();
   const refresh=async()=>{
