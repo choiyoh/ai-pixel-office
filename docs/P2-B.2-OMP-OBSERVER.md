@@ -1,5 +1,7 @@
 # P2-B.2 — OMP 관찰 어댑터
 
+> **현재 운영 상태(2026-10-18):** 이 문서의 미적용 제안은 과거 기록입니다. 전역 위임 정의는 후속 승인으로 적용됐고 현재는 observe-omp-durable.mjs를 사용합니다. 최신 상태·승인 경계·검증 근거는 [P2-B.4 Mac 인수인계서](HANDOFF-P2-B4-MAC.md)를 먼저 확인하세요.
+
 ## 확인한 실행 경로
 
 2026-10-18 Mac ARM64에서 설치된 `@oh-my-pi/pi-coding-agent` 18.10.0을 확인했다. 실제 독립 print 실행의 assistant 메타데이터는 provider=`commandcode`, model=`deepseek/deepseek-v4.1-flash`였다. 현재 사용 경로는 **OMP → Command Code provider → DeepSeek**다. 별도 Command Code CLI 설치는 필요하지 않다.

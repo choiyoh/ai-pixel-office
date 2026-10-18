@@ -1,5 +1,7 @@
 # P2-B.4 — OMP 내구 Outbox와 재전송
 
+> **현재 운영 상태(2026-10-18):** 후속 사용자 승인으로 운영 활성화까지 완료했습니다. 아래 미적용 Diff/승인 계획은 최초 작성 시점의 기록이며 현재는 새 durable 송신기가 전역 위임에 적용돼 있습니다. 최신 상태·승인 경계·검증 근거는 [P2-B.4 Mac 인수인계서](HANDOFF-P2-B4-MAC.md)를 먼저 확인하세요.
+
 ## 상태와 활성화 경계
 
 새 경로는 `scripts/observe-omp-durable.mjs`다. 기존 `scripts/observe-omp.mjs`와 전역 위임 명령은 유지한다. 기존 observeOmp에 추가한 queued ack 분기는 `transport.durable === true`인 새 경로에서만 사용한다. 기존 Hook·Claude·OMP 설정을 설치/재등록하지 않는다. 구현/검사는 임시 private stateDir에서 수행하며 운영 활성화는 아래 Diff 별도 승인 후 진행한다.

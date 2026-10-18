@@ -1,5 +1,7 @@
 # P2-B.1 — Provider Bridge 기반
 
+> **현재 운영 상태(2026-10-18):** 이 문서는 B.1 작성 당시의 범위입니다. 이후 OMP 경유 DeepSeek 실제 위임·Live 채널·내구 송신기 운영 적용까지 완료했습니다. 독립 Command Code CLI를 새로 설치할 필요는 없습니다. 최신 상태·승인 경계·검증 근거는 [P2-B.4 Mac 인수인계서](HANDOFF-P2-B4-MAC.md)를 먼저 확인하세요.
+
 상태: 코드와 합성 검증. 실제 Command Code/DeepSeek 연결은 미검증이다. P2-A.4 운영 경로를 교체하지 않는다.
 
 ## 범위와 분리

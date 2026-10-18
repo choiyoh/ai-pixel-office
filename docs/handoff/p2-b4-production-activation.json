@@ -1,0 +1,37 @@
+{
+  "sourceCommit": "ca627c5631d28a73cf1d680dbd1e4358f68882c5",
+  "agentBeforeSHA256": "e50957755abb543a47198d7b9b0ff3843a02bfe2a5606f0c9bdfd4f767282253",
+  "agentAfterSHA256": "38ff6939a27bae1fdfb7db46339bd89f6f4b03421bf9ed120ac6a96e612480e8",
+  "onlyApprovedFilenameChanged": true,
+  "protectedSettingsUnchanged": true,
+  "historicalLedgersByteIdenticalAtRestart": true,
+  "historicalBridgeRecordsPreserved": {
+    "executions": true,
+    "sessions": true,
+    "deliveries": true
+  },
+  "historicalClaudeRecordsPreserved": true,
+  "pending": 0,
+  "retainedRuns": 2,
+  "terminalExecutions": 7,
+  "activeBrowserPassed": true,
+  "visualMs": [
+    731
+  ],
+  "bindingPrivate": true,
+  "productionActivated": true,
+  "servers": [
+    {
+      "name": "bridge",
+      "pid": 67960,
+      "port": 4183,
+      "entry": "scripts/provider-bridge.mjs"
+    },
+    {
+      "name": "office",
+      "pid": 67963,
+      "port": 4173,
+      "entry": "server/app.mjs"
+    }
+  ]
+}

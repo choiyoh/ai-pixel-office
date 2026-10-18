@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "checkedAtUTC": "2026-10-18T13:00:37.748Z",
+  "timeZone": "Asia/Seoul",
+  "repository": "https://github.com/choiyoh/ai-pixel-office",
+  "branch": "codex/p2-b4-omp-outbox",
+  "verifiedCodeCommit": "ca627c5631d28a73cf1d680dbd1e4358f68882c5",
+  "documentationOnlyDelivery": true,
+  "runtime": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "22.23.3",
+    "claudeCode": "2.1.299",
+    "omp": "18.10.0",
+    "executionPath": "Claude Code -> durable wrapper -> OMP -> Command Code provider -> DeepSeek"
+  },
+  "services": [
+    {
+      "name": "office",
+      "pid": 67963,
+      "port": 4173,
+      "entry": "server/app.mjs",
+      "cwd": "/Users/yohan/Documents/ChatGPT/ai-pixel-office/orbit-works-p2a4",
+      "ready": true,
+      "source": "live",
+      "revision": 130,
+      "activeActors": 0
+    },
+    {
+      "name": "bridge",
+      "pid": 67960,
+      "port": 4183,
+      "entry": "scripts/provider-bridge.mjs",
+      "cwd": "/Users/yohan/Documents/ChatGPT/ai-pixel-office/orbit-works-p2a4",
+      "ready": true,
+      "source": "live",
+      "revision": 35,
+      "activeActors": 0,
+      "pending": 0,
+      "terminalExecutions": 7
+    }
+  ],
+  "outbox": {
+    "pending": 0,
+    "retainedRuns": 2,
+    "capacityRemaining": 1022,
+    "bindingMatchesInstallation": true,
+    "automaticDaemonInstalled": false,
+    "loginAutostartInstalled": false
+  },
+  "protectedFileHashes": {
+    ".claude/settings.json": "6c3f865652edf7bb9063d83c8a1af2a5daf16886f0cda8cfff6e0cc8c7701eb9",
+    ".claude/agents/omp-deepseek.md": "38ff6939a27bae1fdfb7db46339bd89f6f4b03421bf9ed120ac6a96e612480e8",
+    ".omp/agent/config.yml": "4247ffbae51837bf43365ca77106790b116d0fd20c0367961499a9e1948bf04b",
+    ".omp/agent/models.yml": "953d38be0ff56910cc145cea511072eef748ec4b8a9829ed3d0233fc42a27263"
+  },
+  "claudeHooks": {
+    "counts": {
+      "Notification": 1,
+      "PermissionRequest": 1,
+      "PostToolUse": 1,
+      "PreToolUse": 1,
+      "SessionEnd": 1,
+      "SessionStart": 1,
+      "Stop": 1,
+      "SubagentStop": 1,
+      "PostToolUseFailure": 1,
+      "SubagentStart": 1,
+      "TeammateIdle": 1,
+      "TaskCompleted": 1
+    },
+    "total": 12,
+    "registeredSenderPath": "/Users/yohan/Documents/ChatGPT/ai-pixel-office/orbit-works-p2a3/dist/claude-forwarder.cjs",
+    "registeredSenderSHA256": "4a75342fed3b16087638a83adf45e761d51ef177cbd2ee79878992747b5dcbe5"
+  },
+  "ci": {
+    "url": "https://github.com/choiyoh/ai-pixel-office/actions/runs/39113460790",
+    "headSha": "ca627c5631d28a73cf1d680dbd1e4358f68882c5",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "node-local-app (macos-latest)",
+        "conclusion": "success"
+      },
+      {
+        "name": "node-local-app (ubuntu-latest)",
+        "conclusion": "success"
+      },
+      {
+        "name": "node-local-app (windows-latest)",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "validationScope": {
+    "macClaudeReadEditAndFreshProcessResume": true,
+    "macOmpReadAndDurableRecovery": true,
+    "ompResume": false,
+    "macOmpEdit": false,
+    "windowsLinuxNativeOmp": false,
+    "ciOmpUsesSyntheticChildren": true,
+    "combinedProviderScene": false,
+    "realRelayExecutorCorrelation": false
+  },
+  "counts": {
+    "unitPass": 31,
+    "macIntegrationPass": 40,
+    "macWindowsOnlySkips": 4
+  }
+}

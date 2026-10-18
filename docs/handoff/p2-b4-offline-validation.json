@@ -1,0 +1,38 @@
+{
+  "source": "actual-omp-durable-cli-offline",
+  "syntheticOmpUsed": false,
+  "rawOutputStored": false,
+  "productionActivated": false,
+  "nativeExitCode": 0,
+  "markerReturned": true,
+  "stderrSeen": false,
+  "queuedWhileOffline": 5,
+  "privateDataAbsent": true,
+  "queuedKinds": [
+    "session.start",
+    "tool.start",
+    "tool.end",
+    "turn.end",
+    "execution.end"
+  ],
+  "nativeModelObserved": true,
+  "closedReplayDidNotRespawn": true,
+  "committedRevision": 5,
+  "terminalExecutions": 1,
+  "originalObservationTimesPreserved": true,
+  "protectedFilesUnchanged": true,
+  "passed": true,
+  "codeCommit": "ca627c5631d28a73cf1d680dbd1e4358f68882c5",
+  "replay": {
+    "delivered": 5,
+    "duplicateReceipts": 0,
+    "pending": 0,
+    "blockedRuns": 0,
+    "retainedRuns": 1,
+    "capacityRemaining": 1023,
+    "offline": false,
+    "rejected": false,
+    "lastStatus": null,
+    "installationMismatch": false
+  }
+}

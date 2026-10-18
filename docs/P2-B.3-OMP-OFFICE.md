@@ -1,5 +1,7 @@
 # P2-B.3 — OMP Live 관찰 채널
 
+> **현재 운영 상태(2026-10-18):** 이 문서는 B.3 시점의 범위입니다. 이후 B.4 Outbox가 구현·운영 적용됐습니다. 본문의 미구현/서버 상태는 당시 기록과 구분하세요. 최신 상태·승인 경계·검증 근거는 [P2-B.4 Mac 인수인계서](HANDOFF-P2-B4-MAC.md)를 먼저 확인하세요.
+
 ## 범위
 
 기존 Live 화면에 `관찰 채널: Claude Code / OMP` 선택을 추가했다. OMP의 실제 수신 자료를 기존 Pixel Agents Renderer와 LiveAnimationScheduler(750ms)에 연결한다. 두 채널은 별도 scene과 installation UUID별 좌석 저장소를 사용한다. 같은 숫자 renderId도 채널 전환 시 캐릭터·필터·선택·애니메이션을 재사용하지 않는다. 선택 채널은 로컬 설정으로 유지한다.
