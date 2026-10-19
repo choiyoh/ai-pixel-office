@@ -3,7 +3,7 @@
 **다음 에이전트는 이 문서를 먼저 읽고, 현재 상태를 읽기 전용으로 재확인한 뒤 사용자께서 지정하는 다음 작업을 진행해 주세요. 이 문서 작성 자체는 새 기능 구현이나 서버 재시작 요청이 아닙니다.**
 
 - 최종 운영 확인: **2026-10-19 10:10 KST**.
-- ③ 검증·적용 코드: **`4d1a45d`**(resume 계약·세션 신원 안정화) + **`f7f741b`**(lint 수정) + **`b8e84a0`**(durable 큐의 resume 수락). CI [39181391934](https://github.com/choiyoh/ai-pixel-office/actions/runs/39181391934) 3-OS success(4d1a45d/f7f741b), b8e84a0은 별도 실행 결과를 §8 표에 기록합니다. 직전 ②(`0fa83da`+`b67bd9d`)는 [39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) 3-OS success입니다.
+- ③ 검증·적용 코드: **`4d1a45d`**(resume 계약·세션 신원 안정화) + **`f7f741b`**(lint 수정) + **`b8e84a0`**(durable 큐의 resume 수락). CI [39181391934](https://github.com/choiyoh/ai-pixel-office/actions/runs/39181391934)(4d1a45d/f7f741b)과 [39183152373](https://github.com/choiyoh/ai-pixel-office/actions/runs/39183152373)(b8e84a0/1d66707) 모두 3-OS success입니다. 직전 ②(`0fa83da`+`b67bd9d`)도 [39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) 3-OS success입니다.
 - 최신 작업 브랜치: **`codex/p2-b6-relay-executor-correlation`**, origin에 push되어 있습니다.
 - 이후 문서 커밋(`8f9ca39`·`0650e3f`·`35306b0`·`653893c`)에는 별도 코드 CI를 주장하지 않습니다. **코드 기준은 ③의 `4d1a45d` + `f7f741b` + `b8e84a0`입니다.**
 - 프로젝트는 P2-A.4, P2-B.1~B.6 ③(운영 적용 포함)까지 진행했습니다. **P2-B 전체의 모든 요구가 완료된 것은 아닙니다** — Windows/Linux native가 남아 있습니다.
@@ -211,7 +211,7 @@ Hook12종: Notification, PermissionRequest, PostToolUse, PreToolUse, SessionEnd,
 | P2-B.5 | 읽기 전용 Outbox status(보존 실행·여유·blocked·설치 불일치·last rejection)·recovery 힌트·archive 도구, 웹 서버 운영 적용 | **a02aca5**+**636df55**, [CI39132147816](https://github.com/choiyoh/ai-pixel-office/actions/runs/39132147816) |
 | P2-B.6 ① | relay↔executor 실제 correlation: `parentExecution`(HMAC 실행 증명) 계약·Bridge ledger v3·웹 대조·UI 위임 출처, 두 서버 재시작 후 실제 위임 실증 | **f153a2d**+**0650e3f**, [CI39135067830](https://github.com/choiyoh/ai-pixel-office/actions/runs/39135067830) |
 | P2-B.6 ② | 동시 provider scene: 읽기 전용 `/api/scene/snapshot` 통합 뷰(OMP engine key `+1_000_000`), 채널 하나 장애 시 다른 쪽 유지, 위임 링크·"대상 보기", 웹 재시작 후 실제 위임 실화면 실증 | **0fa83da**+**b67bd9d**, [CI39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) |
-| P2-B.6 ③ | OMP Resume 계약(ephemeral/stored/explicit resume)·세션 신원 안정화(설치 단위 salt)·durable 큐 resume 수락(관찰된 세션만)·실제 edit 도구 실증: 같은 actor·세대 1→2, 실 OMP E2E + 운영 스택 실증 + 계약 테스트 4종 | **4d1a45d**+**f7f741b**+**b8e84a0**, CI 39181391934 |
+| P2-B.6 ③ | OMP Resume 계약(ephemeral/stored/explicit resume)·세션 신원 안정화(설치 단위 salt)·durable 큐 resume 수락(관찰된 세션만)·실제 edit 도구 실증: 같은 actor·세대 1→2, 실 OMP E2E + 운영 스택 실증 + 계약 테스트 4종 | **4d1a45d**+**f7f741b**+**b8e84a0**, [CI39181391934](https://github.com/choiyoh/ai-pixel-office/actions/runs/39181391934)·[39183152373](https://github.com/choiyoh/ai-pixel-office/actions/runs/39183152373) |
 
 P2-A.4의 실제 Mac PASS: ANIMATION_PASS, SESSION_RESUME_PASS, MAC_LIVE_PASS, CROSS_PLATFORM_CI_PASS. 실제 Claude Read/Edit와 generation1→2→3·좌석 유지·새로고침·서버 재시작·별도 독립 세션을 확인했습니다.
 
