@@ -27,10 +27,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # The official installers put bun exactly where OMP's shim looks for it
+      # (~/.bun/bin/bun.exe); npm's global package does not, and the shim then
+      # fails with "bun is not installed in %PATH%".
       - name: Install bun
-        run: npm install -g bun
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell.exe -NoProfile -Command "irm bun.sh/install.ps1 | iex"
+          else
+            curl -fsSL https://bun.sh/install | bash
+          fi
       - name: Install OMP
-        run: bun add -g @oh-my-pi/pi-coding-agent
+        shell: bash
+        run: |
+          export PATH="$HOME/.bun/bin:$PATH"
+          bun add -g @oh-my-pi/pi-coding-agent
+          omp --version
       - name: Probe native OMP shape and spawn
         run: node scripts/omp-native-probe.mjs
       - uses: actions/upload-artifact@v4
