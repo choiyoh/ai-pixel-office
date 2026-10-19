@@ -1,0 +1,33 @@
+name: native OMP probe (dispatch only)
+
+# P2-B.6 ④ evidence: how OMP installs on each platform and whether the observer
+# can spawn it with no command shell. Dispatch-only on purpose — it installs OMP
+# from the public registry and never touches the live stack, the outbox, or the
+# bridge. Windows is the target; macOS runs the same probe as a control so a
+# difference is attributable to the platform rather than to the script.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install bun
+        run: npm install -g bun
+      - name: Install OMP
+        run: bun add -g @oh-my-pi/pi-coding-agent
+      - name: Probe native OMP shape and spawn
+        run: node scripts/omp-native-probe.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: omp-native-probe-${{ matrix.os }}
+          path: artifacts/omp-native-probe-*.json
