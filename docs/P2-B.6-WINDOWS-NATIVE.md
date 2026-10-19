@@ -52,8 +52,19 @@ gh run download <run-id> -n omp-native-probe-windows-latest -D ./probe-win
 PROBE_SKIP_RUNS=1 node scripts/omp-native-probe.mjs
 ```
 
-## 5. 남은 것과 경계
+## 5. provider 라우팅 — 러너에서는 형태가 provider를 결정한다 (run 39190586169, v6)
 
-- **실 모델 왕복(Windows)**: 러너에 `COMMAND_CODE_API_KEY`(또는 Command Code provider 설정)를 주면 같은 프로브가 실 응답까지 간다. 키 등록은 저장소 소유자의 결정이며, 이 저장소는 키를 커밋하지 않는다. OMP가 실제로 답하면 artifact에 응답 일부가 남으므로 프롬프트는 무해한 문장으로 유지한다.
+| 형태 | 러너의 해석 | 결과 |
+|---|---|---|
+| `-p --model deepseek/deepseek-v4.1-flash …` (**위임 정의 그대로**) | openrouter | `No API key found for openrouter` |
+| `-p --provider commandcode --model deepseek/deepseek-v4.1-flash …` | **commandcode** | `No API key found for commandcode` |
+
+- 운영 Mac에서 같은 인자가 commandcode로 가는 이유는 러너에 없는 **`~/.omp/agent/agent.db` 로그인**이 provider를 정해 주기 때문이다. 무설정 러너에서 실 왕복을 만들려면 **`--provider commandcode`를 명시**해야 한다.
+- 키 이름은 OMP 번들에서 확인했다: `commandcode` provider의 `env.vars` = `["COMMAND_CODE_API_KEY","COMMANDCODE_API_KEY"]`. 따라서 저장소 secret 이름은 **`COMMAND_CODE_API_KEY`** 하나면 되고, 워크플로우는 그 값을 러너 환경변수로만 주입한다(값은 저장소에 남지 않는다).
+- 두 형태 모두 `session.start → execution.end`를 관찰했다(4/4) — 옵저버 경로는 자격증명과 무관하게 정상이다.
+
+## 6. 남은 것과 경계
+
+- **실 모델 왕복(Windows)**: secret(`COMMAND_CODE_API_KEY`) 등록 후 provider 고정 형태가 실 응답을 받는지 확인하는 것이 남은 한 걸음이다. 키 등록은 저장소 소유자 결정이며 이 저장소는 키를 커밋하지 않는다. OMP가 실제로 답하면 artifact에 응답 일부가 남으므로 프롬프트는 무해한 문장으로 유지한다.
 - **리눅스**: 우선순위 아님(사용자 지시). 매트릭스에 `ubuntu-latest` 한 줄을 더하면 같은 증거가 나온다.
 - **이 문서가 주장하지 않는 것**: Windows 데스크톱 사용자의 로그인 셸·전역 설정·실 자격증명에서의 동작. 검증된 것은 **플랫폼 경로(설치·기동·스폰·이벤트 관찰)**까지다.
