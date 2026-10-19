@@ -2,9 +2,10 @@
 
 ## 0. 요약
 
-- Windows(GitHub Actions `windows-latest`, win32/x64)에서 **OMP가 설치되고 실행되며, 관찰 래퍼가 셸 없이 스폰해 이벤트를 관찰**한다. macOS 대조군과 동일한 결과다.
-- **래퍼 수정이 필요 없다**: Windows에서도 `omp`는 `.cmd`가 아니라 **`omp.exe`**(bun 셰임)로 설치되어, 옵저버의 "셸 폴백 금지" 규칙과 충돌하지 않는다.
-- 남은 미검증은 **실 모델 왕복 하나**다: 러너에 자격증명이 없어 OMP가 `No API key found`로 종료한다(macOS 대조군과 동일한 지점). 이는 별도 승인(CI secret) 또는 실 Windows 머신이 필요한 범위다.
+- **④ 완료**: Windows(GitHub Actions `windows-latest`, win32/x64)에서 OMP가 설치·실행되고, 관찰 래퍼가 셸 없이 스폰하며, **실제 Command Code 키로 실 모델 왕복까지 성공**했다(macOS 대조군과 동일 결과).
+- **래퍼·위임 정의 수정이 필요 없다**: `omp`는 Windows에서도 `.cmd`가 아니라 `omp.exe`(bun 셰임)이고, 운영 위임 형태(`--model deepseek/deepseek-v4.1-flash`, provider 미지정)가 키가 있는 러너에서 그대로 동작한다.
+- 실 왕복 증거(run [39218889897](https://github.com/choiyoh/ai-pixel-office/actions/runs/39218889897)): 스폰 4/4 + 직접 실행 2/2가 `exit 0`, `observedKinds [session.start, turn.end, execution.end]`, 자식 출력 `OK`.
+- 남은 범위: 리눅스(사용자 우선순위 아님)와 실제 Windows 데스크톱 사용자의 로그인 셸·전역 설정(문서가 주장하지 않는 경계).
 
 ## 1. 방법
 
@@ -30,6 +31,8 @@ spawns (shell: false)
 
 macOS 대조군(같은 run): `omp/18.12.2`, 동일한 `[session.start, execution.end]`, 동일한 `No API key found` 오류.
 
+**v7(run [39218889897](https://github.com/choiyoh/ai-pixel-office/actions/runs/39218889897), 저장소 secret 등록 후 같은 프로브)**: 위 4개 스폰이 전부 **`exit 0`** + `observedKinds [session.start, turn.end, execution.end]`가 되고, 직접 실행도 **`status 0`** + stdout **`OK`**였다. 자격증명이 답하면 턴이 끝까지 진행하고(`turn.end`) 옵저버가 그것을 관찰한다. macOS도 동일하다 — 실패였던 지점은 플랫폼이 아니라 자격증명이었다는 증거다.
+
 해석:
 
 - `session.start`가 **관찰된다** = 옵저버가 프로세스를 띄우고 JSON 스트림을 파싱했다.
@@ -52,19 +55,21 @@ gh run download <run-id> -n omp-native-probe-windows-latest -D ./probe-win
 PROBE_SKIP_RUNS=1 node scripts/omp-native-probe.mjs
 ```
 
-## 5. provider 라우팅 — 러너에서는 형태가 provider를 결정한다 (run 39190586169, v6)
+## 5. provider 라우팅 — 키가 있으면 위임 형태 그대로 동작한다 (run 39190586169 → 39218889897)
 
-| 형태 | 러너의 해석 | 결과 |
+자격증명 유무로 같은 인자의 해석이 달라진다.
+
+| 상태 | `--model deepseek/deepseek-v4.1-flash` (위임 형태 그대로) | provider 고정 형태 |
 |---|---|---|
-| `-p --model deepseek/deepseek-v4.1-flash …` (**위임 정의 그대로**) | openrouter | `No API key found for openrouter` |
-| `-p --provider commandcode --model deepseek/deepseek-v4.1-flash …` | **commandcode** | `No API key found for commandcode` |
+| 키 없음 (v6, [39190586169](https://github.com/choiyoh/ai-pixel-office/actions/runs/39190586169)) | `No API key found for openrouter` | `No API key found for commandcode` |
+| 키 있음 (v7, [39218889897](https://github.com/choiyoh/ai-pixel-office/actions/runs/39218889897)) | **성공** — `exit 0`, `[session.start, turn.end, execution.end]`, 출력 `OK` | **성공** — 동일 |
 
-- 운영 Mac에서 같은 인자가 commandcode로 가는 이유는 러너에 없는 **`~/.omp/agent/agent.db` 로그인**이 provider를 정해 주기 때문이다. 무설정 러너에서 실 왕복을 만들려면 **`--provider commandcode`를 명시**해야 한다.
-- 키 이름은 OMP 번들에서 확인했다: `commandcode` provider의 `env.vars` = `["COMMAND_CODE_API_KEY","COMMANDCODE_API_KEY"]`. 따라서 저장소 secret 이름은 **`COMMAND_CODE_API_KEY`** 하나면 되고, 워크플로우는 그 값을 러너 환경변수로만 주입한다(값은 저장소에 남지 않는다).
-- 두 형태 모두 `session.start → execution.end`를 관찰했다(4/4) — 옵저버 경로는 자격증명과 무관하게 정상이다.
+- 해석: OMP는 provider 미지정 시 **인증된 provider를 찾는다**. 키가 없으면 openrouter로 추정해 멈추고, `COMMAND_CODE_API_KEY`가 있으면 commandcode로 라우팅한다.
+- **따라서 위임 정의(`~/.claude/agents/omp-deepseek.md`)를 바꿀 필요가 없다.** provider 고정 형태는 진단용일 뿐이며, 실 왕복은 두 형태 모두 성공한다.
+- 키 이름은 OMP 번들에서 확인했다: `commandcode` provider의 `env.vars` = `["COMMAND_CODE_API_KEY","COMMANDCODE_API_KEY"]`. 저장소 secret 이름은 **`COMMAND_CODE_API_KEY`** 하나면 되고, 워크플로우는 그 값을 러너 환경변수로만 주입한다(값은 저장소에 남지 않는다).
 
 ## 6. 남은 것과 경계
 
-- **실 모델 왕복(Windows)**: secret(`COMMAND_CODE_API_KEY`) 등록 후 provider 고정 형태가 실 응답을 받는지 확인하는 것이 남은 한 걸음이다. 키 등록은 저장소 소유자 결정이며 이 저장소는 키를 커밋하지 않는다. OMP가 실제로 답하면 artifact에 응답 일부가 남으므로 프롬프트는 무해한 문장으로 유지한다.
-- **리눅스**: 우선순위 아님(사용자 지시). 매트릭스에 `ubuntu-latest` 한 줄을 더하면 같은 증거가 나온다.
-- **이 문서가 주장하지 않는 것**: Windows 데스크톱 사용자의 로그인 셸·전역 설정·실 자격증명에서의 동작. 검증된 것은 **플랫폼 경로(설치·기동·스폰·이벤트 관찰)**까지다.
+- **④ 실 왕복 완료** (v7). 리눅스는 우선순위 아님(사용자 지시)이며, 매트릭스에 `ubuntu-latest` 한 줄을 더하면 같은 증거가 나온다.
+- **이 문서가 주장하지 않는 것**: Windows 데스크톱 사용자의 로그인 셸·전역 설정에서의 동작. 검증된 것은 **런너의 Windows 커널에서의 설치·기동·스폰·관찰·실 모델 왕복**까지다.
+- 프로브는 CI 전용이다(자격증명 있는 머신에서 실행하면 실 호출이 나간다). 로컬 검증은 `PROBE_SKIP_RUNS=1`을 쓴다.
