@@ -72,6 +72,26 @@ const cli = path.join(
 );
 report.ompCli = { path: cli, exists: fs.existsSync(cli) };
 
+// A CI runner has no ~/.bun/bin on PATH, so resolve every candidate by absolute
+// path as well — the point is to learn which ones the observer can spawn.
+const absolute = (...parts) => path.join(binDir, ...parts);
+const dedupe = (values) => values.filter((v, i, a) => a.indexOf(v) === i);
+report.candidates = {
+  omp: dedupe([
+    absolute(process.platform === "win32" ? "omp.exe" : "omp"),
+    absolute("omp.exe"),
+    absolute("omp"),
+  ]),
+  bun: dedupe([absolute(process.platform === "win32" ? "bun.exe" : "bun"), absolute("bun.exe"), absolute("bun")]),
+};
+report.candidates.omp = report.candidates.omp.filter((p) => fs.existsSync(p));
+report.candidates.bun = report.candidates.bun.filter((p) => fs.existsSync(p));
+const npmPrefix = spawnSync("npm", ["prefix", "-g"], { encoding: "utf8", shell: false });
+if (npmPrefix.status === 0) {
+  const npmBun = path.join(npmPrefix.stdout.trim(), process.platform === "win32" ? "bun.exe" : "bin/bun");
+  if (fs.existsSync(npmBun)) report.candidates.bun.push(npmBun);
+}
+
 // The exact launch shape the omp-deepseek delegation uses, minus the task.
 const probeArgs = [
   "-p",
@@ -105,12 +125,21 @@ const attempt = async (label, options) => {
   }
 };
 
-await attempt("executable=omp (PATH)", { executable: "omp" });
-if (fs.existsSync(bunExe) && fs.existsSync(cli))
-  await attempt("executable=bun + cli launcher", {
-    executable: bunExe,
+// A user's login shell has ~/.bun/bin on PATH; give the runner the same view
+// before falling back to absolute paths.
+const delimiter = process.platform === "win32" ? ";" : ":";
+process.env.PATH = `${binDir}${delimiter}${process.env.PATH ?? ""}`;
+
+await attempt("executable=omp (PATH incl. bun bin)", { executable: "omp" });
+for (const candidate of report.candidates.omp)
+  await attempt(`executable=${candidate}`, { executable: candidate });
+for (const bunCandidate of report.candidates.bun) {
+  if (!fs.existsSync(cli)) break;
+  await attempt(`executable=${bunCandidate} + cli launcher`, {
+    executable: bunCandidate,
     launcherPrefix: [cli],
   });
+}
 
 fs.mkdirSync(path.join(root, "artifacts"), { recursive: true });
 const file = path.join(
