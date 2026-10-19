@@ -58,9 +58,10 @@ export function ompStreamEvent(raw, context) {
     kind,
   };
   if (kind === "session.start") {
-    if (context.startSource !== "startup")
+    const startSource = context.startSource ?? "startup";
+    if (!["startup", "resume"].includes(startSource))
       throw bridgeError(422, "omp-fresh-print-only");
-    event.startSource = "startup";
+    event.startSource = startSource;
     if (context.parentExecution !== undefined && context.parentExecution !== null)
       event.parentExecution = context.parentExecution;
   }

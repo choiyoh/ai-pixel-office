@@ -409,3 +409,152 @@ test("cancelling the owned OMP child observes its real close rather than inventi
     f.cleanup();
   }
 });
+
+test("native session identity is stable across runs and scoped to the installation", async () => {
+  const f = fixture();
+  try {
+    const cli = fakeCli(f.root, [{ type: "session", id: "PRIVATE-NATIVE" }]);
+    const runOnce = async (installationId) => {
+      const seen = [];
+      await observeOmp({
+        executable: process.execPath,
+        launcherPrefix: [cli],
+        args,
+        cwd: f.root,
+        transport: {
+          installationInstanceId: installationId,
+          send: async (e) => {
+            seen.push(e);
+            return { accepted: true, disposition: "committed" };
+          },
+        },
+      });
+      return seen.find((e) => e.kind === "session.start").nativeSessionId;
+    };
+    const first = await runOnce(f.p.installationInstanceId);
+    const second = await runOnce(f.p.installationInstanceId);
+    const other = await runOnce("00000000-0000-4000-8000-000000000001");
+    assert.equal(typeof first, "string");
+    assert.ok(first.length > 0);
+    // A resumed native session must map to the same actor, so the digest has
+    // to survive a new process; the raw native id still never appears.
+    assert.equal(first, second);
+    assert.notEqual(first, other);
+    assert.ok(![first, second, other].includes("PRIVATE-NATIVE"));
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("an unreported installation keeps per-run session identity", async () => {
+  const f = fixture();
+  try {
+    const cli = fakeCli(f.root, [{ type: "session", id: "PRIVATE-NATIVE" }]);
+    const runOnce = async () => {
+      const seen = [];
+      await observeOmp({
+        executable: process.execPath,
+        launcherPrefix: [cli],
+        args,
+        cwd: f.root,
+        transport: {
+          send: async (e) => {
+            seen.push(e);
+            return { accepted: true, disposition: "committed" };
+          },
+        },
+      });
+      return seen.find((e) => e.kind === "session.start").nativeSessionId;
+    };
+    assert.notEqual(await runOnce(), await runOnce());
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("OMP observer accepts an explicit resume run and refuses unsafe resume variants", async () => {
+  const f = fixture();
+  try {
+    const cli = fakeCli(f.root, [{ type: "session", id: "PRIVATE-NATIVE" }]);
+    const launch = (extra, over = {}) =>
+      observeOmp({
+        executable: process.execPath,
+        launcherPrefix: [cli],
+        args: ["-p", "--no-extensions", "--max-time", "5", ...extra],
+        cwd: f.root,
+        ...over,
+      });
+    // The fresh path is unchanged: it still requires an ephemeral session or
+    // an explicit directory for a stored one.
+    await assert.rejects(() => launch([]), /fresh ephemeral, stored or explicit resume/);
+    // A resume cannot be ephemeral, and needs a directory plus a real target.
+    await assert.rejects(
+      () =>
+        launch([
+          "--no-session",
+          "--resume",
+          "opaque",
+          "--session-dir",
+          "/tmp/omp-sessions",
+        ]),
+      /cannot resume an ephemeral session/,
+    );
+    await assert.rejects(
+      () => launch(["--resume", "opaque"]),
+      /explicit session directory/,
+    );
+    await assert.rejects(
+      () => launch(["--resume", "--session-dir", "/tmp/omp-sessions"]),
+      /explicit session id/,
+    );
+    // Continue, profiles and other unreviewed launch options stay refused.
+    await assert.rejects(
+      () =>
+        launch([
+          "--resume",
+          "opaque",
+          "--session-dir",
+          "/tmp/omp-sessions",
+          "--continue",
+        ]),
+      /Unreviewed OMP observer launch option/,
+    );
+    await assert.rejects(
+      () =>
+        launch([
+          "--resume",
+          "opaque",
+          "--session-dir",
+          "/tmp/omp-sessions",
+          "--profile",
+          "x",
+        ]),
+      /Unreviewed OMP observer launch option/,
+    );
+    // The reviewed resume run reports its source and reaches the ledger.
+    const sent = [];
+    const r = await launch(
+      ["--resume", "opaque", "--session-dir", "/tmp/omp-sessions"],
+      {
+        transport: {
+          installationInstanceId: f.p.installationInstanceId,
+          send: async (e) => {
+            sent.push(e);
+            return { accepted: true, disposition: "committed" };
+          },
+        },
+      },
+    );
+    assert.equal(r.exitCode, 0);
+    const starts = sent.filter((e) => e.kind === "session.start");
+    assert.equal(starts.length, 1);
+    assert.equal(starts[0].startSource, "resume");
+    assert.equal(sent.filter((e) => e.startSource !== undefined).length, 1);
+    // The same event reaches a real bridge and starts a visible actor.
+    const receipt = f.bridge.receive(starts[0], f.p);
+    assert.equal(receipt.accepted, true);
+    assert.equal(f.bridge.snapshot().actors.length, 1);
+  } finally {
+    f.cleanup();
+  }
+});

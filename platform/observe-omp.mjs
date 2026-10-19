@@ -41,20 +41,43 @@ const flag = (args, key) => {
   return args.find((a) => a.startsWith(key + "="))?.slice(key.length + 1);
 };
 function printContract(args) {
+  const ephemeral = args.includes("--no-session"),
+    resume =
+      args.includes("--resume") ||
+      args.some((a) => a.startsWith("--resume=")) ||
+      args.includes("-r");
   if (
     (!args.includes("-p") && !args.includes("--print")) ||
-    !args.includes("--no-session") ||
     !args.includes("--no-extensions")
   )
     throw Error(
-      "OMP observer supports fresh print/no-session/no-extensions runs only",
+      "OMP observer supports print runs with extensions disabled only",
     );
+  if (resume) {
+    // A resumable run needs stored state and an explicit target; an ephemeral
+    // resume could never find its session again.
+    if (ephemeral)
+      throw Error("OMP observer cannot resume an ephemeral session");
+    if (!flag(args, "--session-dir"))
+      throw Error("OMP observer requires an explicit session directory to resume");
+    const resumeTarget = flag(args, "--resume") ?? flag(args, "-r");
+    // A flag-shaped value means the caller forgot the id; OMP would fall back
+    // to an interactive picker, which print mode cannot satisfy.
+    if (!resumeTarget || resumeTarget.startsWith("-"))
+      throw Error("OMP observer requires an explicit session id to resume");
+  } else if (!ephemeral && !flag(args, "--session-dir")) {
+    // Stored-but-fresh runs are allowed so the session can be resumed later,
+    // but only into a caller-chosen directory.
+    throw Error(
+      "OMP observer supports fresh ephemeral, stored or explicit resume runs only",
+    );
+  }
   if (
     args.some(
       (a) =>
-        /^--(?:api-key|profile|from-claude|from-codex|continue|resume|session-dir|config|hook|extension|plugin-dir|alias)(?:=|$)/.test(
+        /^--(?:api-key|profile|from-claude|from-codex|continue|config|hook|extension|plugin-dir|alias)(?:=|$)/.test(
           a,
-        ) || ["-r", "-c", "-e"].includes(a),
+        ) || ["-c", "-e"].includes(a),
     )
   )
     throw Error("Unreviewed OMP observer launch option");
@@ -70,6 +93,9 @@ function printContract(args) {
   return {
     args: mode ? args : ["--mode", "json", ...args],
     timeoutMs: ms + 5000,
+    // Resume is decided from the reviewed launch arguments, never from event
+    // text: the native session event carries no resume marker.
+    startSource: resume ? "resume" : "startup",
   };
 }
 // Opt-in supervisor. Raw JSON is held only in a bounded parser, never spooled.
@@ -115,12 +141,21 @@ export async function observeOmp({
     executionId: randomUUID(),
     logicalTaskId: randomUUID(),
     nativeSessionId: null,
-    startSource: "startup",
+    startSource: launch.startSource,
     parentExecution: parentExecution ?? null,
     modelFamily: "unknown",
     modelProvider: "unknown",
   };
-  const identityKey = randomBytes(32);
+  // Session identity has to stay stable across runs, otherwise a resumed
+  // native session can never be recognised as the same actor. The installation
+  // id is a reviewed, non-secret salt: the raw native id still never leaves the
+  // observer (only this keyed digest does). Without a reported installation the
+  // observer keeps the old per-run random key.
+  const identityKey =
+    typeof transport?.installationInstanceId === "string" &&
+    transport.installationInstanceId
+      ? Buffer.from(`omp-observer-v1:${transport.installationInstanceId}`)
+      : randomBytes(32);
   let sequence = 0,
     pending = 0,
     tail = Promise.resolve(),
