@@ -142,10 +142,14 @@ const attempt = async (label, options) => {
     report.spawns.push({ label, skipped: "PROBE_SKIP_RUNS" });
     return;
   }
+  // The child's own words are the proof of a round trip when credentials
+  // answer; the prompt stays harmless so this stays harmless.
+  const output = [];
   try {
     const result = await observeOmp({
       args: options.args,
       input: Buffer.from(""),
+      onOutput: (text) => output.push(text),
       ...options,
     });
     report.spawns.push({
@@ -156,6 +160,7 @@ const attempt = async (label, options) => {
       deliveryErrors: result.deliveryErrors,
       observedKinds: result.observedKinds,
       stderrSeen: result.stderrSeen,
+      outputTail: output.join("").trim().slice(-300),
     });
   } catch (error) {
     report.spawns.push({ label, refused: String(error.message) });
