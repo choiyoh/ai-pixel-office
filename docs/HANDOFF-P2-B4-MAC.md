@@ -6,7 +6,7 @@
 - ③ 검증·적용 코드: **`4d1a45d`**(resume 계약·세션 신원 안정화) + **`f7f741b`**(lint 수정) + **`b8e84a0`**(durable 큐의 resume 수락). CI [39181391934](https://github.com/choiyoh/ai-pixel-office/actions/runs/39181391934)(4d1a45d/f7f741b)과 [39183152373](https://github.com/choiyoh/ai-pixel-office/actions/runs/39183152373)(b8e84a0/1d66707) 모두 3-OS success입니다. 직전 ②(`0fa83da`+`b67bd9d`)도 [39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) 3-OS success입니다.
 - 최신 작업 브랜치: **`codex/p2-b6-relay-executor-correlation`**, origin에 push되어 있습니다.
 - 이후 문서 커밋(`8f9ca39`·`0650e3f`·`35306b0`·`653893c`)에는 별도 코드 CI를 주장하지 않습니다. **코드 기준은 ③의 `4d1a45d` + `f7f741b` + `b8e84a0`입니다.**
-- 프로젝트는 P2-A.4, P2-B.1~B.6 ③(운영 적용 포함)과 ④ **Windows native(실 모델 왕복 포함)**까지 진행했습니다. 리눅스 native는 사용자 지시로 우선순위가 아닙니다.
+- **P2-B 전 항목(B.1~B.6 ①②③④)이 완료**됐습니다. 최종 요약은 `docs/P2-B-REPORT.md`입니다. 남은 것은 리눅스 native(사용자 지시로 우선순위 아님)와 §15의 선택 항목입니다.
 
 ## 1. 가장 먼저 알아야 할 현재 상태
 
