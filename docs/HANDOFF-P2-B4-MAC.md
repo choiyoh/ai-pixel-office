@@ -1,12 +1,12 @@
-# Orbit Works 인수인계서 — P2-B.6 ② 동시 provider scene 운영 적용 완료
+# Orbit Works 인수인계서 — P2-B.6 ③ OMP Resume·실제 Edit 검증 운영 적용 완료
 
 **다음 에이전트는 이 문서를 먼저 읽고, 현재 상태를 읽기 전용으로 재확인한 뒤 사용자께서 지정하는 다음 작업을 진행해 주세요. 이 문서 작성 자체는 새 기능 구현이나 서버 재시작 요청이 아닙니다.**
 
-- 최종 운영 확인: **2026-10-19 07:57 KST**.
-- 검증·배포된 코드: **`0fa83da`**(통합 scene) + **`b67bd9d`**(클라이언트 검증 수정·브라우저 검사). CI는 b67bd9d의 [39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) 3-OS success입니다. 직전 P2-B.6 ①(f153a2d·0650e3f)도 [39135067830](https://github.com/choiyoh/ai-pixel-office/actions/runs/39135067830) 3-OS success입니다.
+- 최종 운영 확인: **2026-10-19 10:10 KST**.
+- ③ 검증·적용 코드: **`4d1a45d`**(resume 계약·세션 신원 안정화) + **`f7f741b`**(lint 수정) + **`b8e84a0`**(durable 큐의 resume 수락). CI [39181391934](https://github.com/choiyoh/ai-pixel-office/actions/runs/39181391934) 3-OS success(4d1a45d/f7f741b), b8e84a0은 별도 실행 결과를 §8 표에 기록합니다. 직전 ②(`0fa83da`+`b67bd9d`)는 [39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) 3-OS success입니다.
 - 최신 작업 브랜치: **`codex/p2-b6-relay-executor-correlation`**, origin에 push되어 있습니다.
-- 이후 문서 커밋(`8f9ca39`·`0650e3f`·`35306b0`·`653893c`)에는 별도 코드 CI를 주장하지 않습니다. **코드 기준은 위 0fa83da + b67bd9d입니다.**
-- 프로젝트는 P2-A.4, P2-B.1~B.6 ②까지 진행했습니다. **P2-B 전체의 모든 요구가 완료된 것은 아닙니다** — OMP Resume/Edit, Windows/Linux native가 남아 있습니다.
+- 이후 문서 커밋(`8f9ca39`·`0650e3f`·`35306b0`·`653893c`)에는 별도 코드 CI를 주장하지 않습니다. **코드 기준은 ③의 `4d1a45d` + `f7f741b` + `b8e84a0`입니다.**
+- 프로젝트는 P2-A.4, P2-B.1~B.6 ③(운영 적용 포함)까지 진행했습니다. **P2-B 전체의 모든 요구가 완료된 것은 아닙니다** — Windows/Linux native가 남아 있습니다.
 
 ## 1. 가장 먼저 알아야 할 현재 상태
 
@@ -105,7 +105,7 @@ claude --version
 | 서비스 | 마지막 확인 PID | 포트 | 실행 |
 | --- | ---: | ---: | --- |
 | 웹/Claude receiver | **57593** | **4173** | Node22 `server/app.mjs`, `ORBIT_MODE=claude-local` (2026-10-19 07:55 KST 재시작, ② 적용. 직전 29448) |
-| OMP Provider Bridge | **28881** | **4183** | Node22 `scripts/provider-bridge.mjs` |
+| OMP Provider Bridge | **90172** | **4183** | Node22 `scripts/provider-bridge.mjs` (2026-10-19 09:12 KST 재시작, ③ 적용. 직전 28881) |
 
 (Bridge 설치 UUID `53efa927…`는 P2-B.4·B.5·B.6 재시작을 거쳐 유지됐고, Outbox binding·등록 토큰이 계속 일치합니다. PID는 재활용될 수 있으므로 문서 값만 보고 kill하지 않습니다.)
 
@@ -211,6 +211,7 @@ Hook12종: Notification, PermissionRequest, PostToolUse, PreToolUse, SessionEnd,
 | P2-B.5 | 읽기 전용 Outbox status(보존 실행·여유·blocked·설치 불일치·last rejection)·recovery 힌트·archive 도구, 웹 서버 운영 적용 | **a02aca5**+**636df55**, [CI39132147816](https://github.com/choiyoh/ai-pixel-office/actions/runs/39132147816) |
 | P2-B.6 ① | relay↔executor 실제 correlation: `parentExecution`(HMAC 실행 증명) 계약·Bridge ledger v3·웹 대조·UI 위임 출처, 두 서버 재시작 후 실제 위임 실증 | **f153a2d**+**0650e3f**, [CI39135067830](https://github.com/choiyoh/ai-pixel-office/actions/runs/39135067830) |
 | P2-B.6 ② | 동시 provider scene: 읽기 전용 `/api/scene/snapshot` 통합 뷰(OMP engine key `+1_000_000`), 채널 하나 장애 시 다른 쪽 유지, 위임 링크·"대상 보기", 웹 재시작 후 실제 위임 실화면 실증 | **0fa83da**+**b67bd9d**, [CI39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) |
+| P2-B.6 ③ | OMP Resume 계약(ephemeral/stored/explicit resume)·세션 신원 안정화(설치 단위 salt)·durable 큐 resume 수락(관찰된 세션만)·실제 edit 도구 실증: 같은 actor·세대 1→2, 실 OMP E2E + 운영 스택 실증 + 계약 테스트 4종 | **4d1a45d**+**f7f741b**+**b8e84a0**, CI 39181391934 |
 
 P2-A.4의 실제 Mac PASS: ANIMATION_PASS, SESSION_RESUME_PASS, MAC_LIVE_PASS, CROSS_PLATFORM_CI_PASS. 실제 Claude Read/Edit와 generation1→2→3·좌석 유지·새로고침·서버 재시작·별도 독립 세션을 확인했습니다.
 
@@ -380,7 +381,7 @@ npm run test:omp-outbox-browser
 npm run test:scene-browser
 ```
 
-최종 코드 ca627c5의 로컬 결과: **단위31 pass, Mac 통합40 pass/Windows 전용4 skip**. 신규 Outbox 통합8개 포함. 최종 세 OS CI 전체 성공. P2-B.6 ② 기준 로컬 결과: **단위32 pass, 통합59 pass/Windows 전용4 skip**, 브라우저7종 통과(신규 `test:scene-browser`). `tests/omp-*`는 합성 자식/fixture를 사용하므로 이 결과를 Windows/Linux native 모델 연결 PASS로 읽지 않습니다.
+최종 코드 ca627c5의 로컬 결과: **단위31 pass, Mac 통합40 pass/Windows 전용4 skip**. 신규 Outbox 통합8개 포함. 최종 세 OS CI 전체 성공. P2-B.6 ② 기준 로컬 결과: **단위32 pass, 통합59 pass/Windows 전용4 skip**, 브라우저7종 통과(신규 `test:scene-browser`). P2-B.6 ③ 기준 로컬 결과: **단위32 pass, 통합63 pass/Windows 전용4 skip**, 브라우저7종 통과(신규 계약 테스트 4종·`scripts/omp-resume-e2e.mjs`). 운영 스택 실증: Bridge 원장에서 같은 세션(02d3449b80)·같은 actor(cbe7b6b1)가 generation 1→2로 이어지고 replay가 `delivered:5, pending:0`을 보고했습니다. `tests/omp-*`는 합성 자식/fixture를 사용하므로 이 결과를 Windows/Linux native 모델 연결 PASS로 읽지 않습니다.
 
 워크플로: `.github/workflows/cross-platform.yml`. main/work push와 PR, workflow_dispatch에 반응합니다. codex 브랜치의 일반 push만으로 실행됐다고 가정하지 마세요.
 
@@ -452,11 +453,13 @@ Claude 조상 실행 증명(pid/birth)을 OMP `session.start`에 부착하고, �
 
 읽기 전용 `/api/scene/snapshot`이 두 채널을 합쳐 **한 scene에 동시 표시**합니다(OMP engine key `+1_000_000` 네임스페이스, Bridge ledger 계약 무변경). 설계·구현·격리 검증·CI·운영 적용·실위임 실화면 실증까지 완료했고 `docs/P2-B.6-SCENE-INTEGRATION-DESIGN.md`가 최신입니다. 표시 이름·palette·좌석은 채널 원본을 유지하고, 업무 단위 중복 제거(두 actor 합치기)는 비목표로 남겨 둡니다.
 
-### 별도 과제: OMP Resume / 다른 OS native 실행
+### 완료됨: OMP Resume 지원과 실제 Edit 검증 (코드·격리)
 
-현재 producer는 fresh print + no-session + no-extensions + bounded max-time만 지원합니다. OMP Resume, 같은 업무 반복 실행의 native 신원 유지, 세션 import/extension/profile은 지원하지 않습니다. 설치 버전의 실제 JSON 계약과 최소 protocol 변경부터 조사해야 합니다. Bridge 기반의 합성 resume 계약이 있다고 실제 OMP Resume를 지원하는 것은 아닙니다.
+관찰 래퍼가 **ephemeral fresh / stored fresh / explicit resume** 세 형태를 받고, resume 실행이 `startSource: "resume"`으로 ledger에 도달합니다. native 세션 신원 해시 키를 설치 단위 salt로 안정화해 같은 세션이 **같은 actor·세대 +1**로 이어지며(원본 native id는 계속 미전송), durable 큐도 **관찰된 세션의 resume**만 수락합니다. 실제 edit 도구 동작과 운영 스택(Bridge 4183) resume 실증까지 완료했습니다(세대 1→2, 같은 세션·같은 actor). 세부는 `docs/P2-B.6-OMP-RESUME-AND-EDIT.md`. Bridge는 2026-10-19 09:12 KST에 재시작해 ③을 적용했고(90172), 이후 outbox 수정은 클라이언트 경로라 재시작이 필요 없습니다.
 
-Windows/Linux 실제 OMP·DeepSeek 연결, 실제 OMP Edit는 미검증입니다. CI 성공을 그 증거로 사용하지 않으며 설치/인증·모델 변경은 별도 범위와 승인이 필요합니다.
+### 별도 과제: 다른 OS native 실행
+
+Windows/Linux 실제 OMP·DeepSeek 연결은 미검증입니다. CI 성공을 그 증거로 사용하지 않으며 설치/인증·모델 변경은 별도 범위와 승인이 필요합니다. 세션 import/extension/profile은 계속 미지원(거부)이며, 운영 위임 정의는 여전히 ephemeral(`--no-session`)입니다.
 
 ## 16. 다음 에이전트가 피해야 할 실수
 
@@ -475,4 +478,4 @@ Windows/Linux 실제 OMP·DeepSeek 연결, 실제 OMP Edit는 미검증입니다
 
 ## 17. 새 에이전트에게 그대로 전달할 시작 지시
 
-> Orbit Works의 인수인계서 `docs/HANDOFF-P2-B4-MAC.md`를 먼저 읽어 주세요. 최신 브랜치는 `codex/p2-b6-relay-executor-correlation`, 검증 코드 기준은 `0fa83da` + `b67bd9d`입니다. P2-B.4 내구 송신기, P2-B.5 Outbox 관찰/복구, P2-B.6 ① relay↔executor correlation, ② 동시 provider scene 운영 적용은 이미 완료됐습니다. 같은 Mac이면 `orbit-works-p2a4`에서 읽기 전용으로 현재 Git·프로세스·설정 fingerprint·actor/pending 상태를 재확인하고, 기존 Hook/OMP 환경과 A3 설치 checkout을 유지해 주세요. 이전 문서의 미적용 계획을 재실행하지 마세요. 다음 작업은 사용자가 지정하는 범위로 진행하며, 새 sender/설정 변경은 구현·격리 검증·정확한 Diff를 먼저 준비한 뒤 별도 승인받아 적용하세요. 한국어 존댓말을 사용하고 실제 검증된 범위에만 PASS를 부여해 주세요.
+> Orbit Works의 인수인계서 `docs/HANDOFF-P2-B4-MAC.md`를 먼저 읽어 주세요. 최신 브랜치는 `codex/p2-b6-relay-executor-correlation`, 검증 코드 기준은 `4d1a45d` + `f7f741b` + `b8e84a0`(③)와 그 이전 `0fa83da` + `b67bd9d`(②)·`f153a2d`(①)입니다. P2-B.4 내구 송신기, P2-B.5 Outbox 관찰/복구, P2-B.6 ① relay↔executor correlation, ② 동시 provider scene 운영 적용, ③ OMP Resume·실제 Edit 검증(운영 적용 포함)은 이미 완료됐습니다. 같은 Mac이면 `orbit-works-p2a4`에서 읽기 전용으로 현재 Git·프로세스·설정 fingerprint·actor/pending 상태를 재확인하고, 기존 Hook/OMP 환경과 A3 설치 checkout을 유지해 주세요. 이전 문서의 미적용 계획을 재실행하지 마세요. 다음 작업은 사용자가 지정하는 범위로 진행하며, 새 sender/설정 변경은 구현·격리 검증·정확한 Diff를 먼저 준비한 뒤 별도 승인받아 적용하세요. 한국어 존댓말을 사용하고 실제 검증된 범위에만 PASS를 부여해 주세요.
