@@ -48,12 +48,13 @@ report.bunVersion =
     ? bun.stdout.trim()
     : { status: bun.status, error: bun.error?.code };
 
-const which = spawnSync(
-  process.platform === "win32" ? "where.exe" : "which",
-  ["omp"],
-  { encoding: "utf8", shell: false },
-);
-report.whichOmp = (which.stdout || "").trim() || { status: which.status };
+const which = (name) =>
+  spawnSync(process.platform === "win32" ? "where.exe" : "which", [name], {
+    encoding: "utf8",
+    shell: false,
+  });
+const whichOmp = which("omp");
+report.whichOmp = (whichOmp.stdout || "").trim() || { status: whichOmp.status };
 
 const omp = spawnSync("omp", ["--version"], { encoding: "utf8", shell: false });
 report.ompVersion =
@@ -115,7 +116,15 @@ const probeArgs = [
   "Reply with OK only.",
 ];
 
+// PROBE_SKIP_RUNS=1 exercises the resolution half locally without launching
+// OMP, which would answer for real on a credentialed machine.
+const skipRuns = process.env.PROBE_SKIP_RUNS === "1";
+
 const attempt = async (label, options) => {
+  if (skipRuns) {
+    report.spawns.push({ label, skipped: "PROBE_SKIP_RUNS" });
+    return;
+  }
   try {
     const result = await observeOmp({
       args: probeArgs,
@@ -155,32 +164,37 @@ for (const bunCandidate of report.candidates.bun) {
 // The observer reports only that stderr was seen; the decisive evidence is the
 // child's own output, so run each candidate directly and keep the tail. This is
 // why the probe is CI-only: a credentialed machine would print a real answer.
-report.direct = report.candidates.omp.map((candidate) => {
-  const version = spawnSync(candidate, ["--version"], {
-    encoding: "utf8",
-    shell: false,
-    timeout: 60000,
-  });
-  const run = spawnSync(candidate, probeArgs, {
-    encoding: "utf8",
-    shell: false,
-    timeout: 120000,
-    input: "",
-  });
-  return {
-    candidate,
-    version: {
-      status: version.status,
-      stdout: (version.stdout || "").trim().slice(0, 200),
-      stderr: (version.stderr || "").trim().slice(0, 200),
-    },
-    run: {
-      status: run.status,
-      stdoutTail: (run.stdout || "").trim().slice(-400),
-      stderrTail: (run.stderr || "").trim().slice(-400),
-    },
-  };
-});
+report.direct = skipRuns
+  ? report.candidates.omp.map((candidate) => ({
+      candidate,
+      skipped: "PROBE_SKIP_RUNS",
+    }))
+  : report.candidates.omp.map((candidate) => {
+      const version = spawnSync(candidate, ["--version"], {
+        encoding: "utf8",
+        shell: false,
+        timeout: 60000,
+      });
+      const run = spawnSync(candidate, probeArgs, {
+        encoding: "utf8",
+        shell: false,
+        timeout: 120000,
+        input: "",
+      });
+      return {
+        candidate,
+        version: {
+          status: version.status,
+          stdout: (version.stdout || "").trim().slice(0, 200),
+          stderr: (version.stderr || "").trim().slice(0, 200),
+        },
+        run: {
+          status: run.status,
+          stdoutTail: (run.stdout || "").trim().slice(-400),
+          stderrTail: (run.stderr || "").trim().slice(-400),
+        },
+      };
+    });
 
 fs.mkdirSync(path.join(root, "artifacts"), { recursive: true });
 const file = path.join(
