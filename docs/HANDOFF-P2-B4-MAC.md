@@ -2,11 +2,11 @@
 
 **다음 에이전트는 이 문서를 먼저 읽고, 현재 상태를 읽기 전용으로 재확인한 뒤 사용자께서 지정하는 다음 작업을 진행해 주세요. 이 문서 작성 자체는 새 기능 구현이나 서버 재시작 요청이 아닙니다.**
 
-- 최종 운영 확인: **2026-10-19 10:10 KST**.
+- 최종 운영 확인: **2026-10-19 10:44 KST**.
 - ③ 검증·적용 코드: **`4d1a45d`**(resume 계약·세션 신원 안정화) + **`f7f741b`**(lint 수정) + **`b8e84a0`**(durable 큐의 resume 수락). CI [39181391934](https://github.com/choiyoh/ai-pixel-office/actions/runs/39181391934)(4d1a45d/f7f741b)과 [39183152373](https://github.com/choiyoh/ai-pixel-office/actions/runs/39183152373)(b8e84a0/1d66707) 모두 3-OS success입니다. 직전 ②(`0fa83da`+`b67bd9d`)도 [39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) 3-OS success입니다.
 - 최신 작업 브랜치: **`codex/p2-b6-relay-executor-correlation`**, origin에 push되어 있습니다.
 - 이후 문서 커밋(`8f9ca39`·`0650e3f`·`35306b0`·`653893c`)에는 별도 코드 CI를 주장하지 않습니다. **코드 기준은 ③의 `4d1a45d` + `f7f741b` + `b8e84a0`입니다.**
-- 프로젝트는 P2-A.4, P2-B.1~B.6 ③(운영 적용 포함)까지 진행했습니다. **P2-B 전체의 모든 요구가 완료된 것은 아닙니다** — Windows/Linux native가 남아 있습니다.
+- 프로젝트는 P2-A.4, P2-B.1~B.6 ③(운영 적용 포함)과 ④ Windows **플랫폼 경로**까지 진행했습니다. **P2-B 전체의 모든 요구가 완료된 것은 아닙니다** — Windows 실 모델 왕복(자격증명 필요)이 남아 있습니다.
 
 ## 1. 가장 먼저 알아야 할 현재 상태
 
@@ -212,6 +212,7 @@ Hook12종: Notification, PermissionRequest, PostToolUse, PreToolUse, SessionEnd,
 | P2-B.6 ① | relay↔executor 실제 correlation: `parentExecution`(HMAC 실행 증명) 계약·Bridge ledger v3·웹 대조·UI 위임 출처, 두 서버 재시작 후 실제 위임 실증 | **f153a2d**+**0650e3f**, [CI39135067830](https://github.com/choiyoh/ai-pixel-office/actions/runs/39135067830) |
 | P2-B.6 ② | 동시 provider scene: 읽기 전용 `/api/scene/snapshot` 통합 뷰(OMP engine key `+1_000_000`), 채널 하나 장애 시 다른 쪽 유지, 위임 링크·"대상 보기", 웹 재시작 후 실제 위임 실화면 실증 | **0fa83da**+**b67bd9d**, [CI39173148512](https://github.com/choiyoh/ai-pixel-office/actions/runs/39173148512) |
 | P2-B.6 ③ | OMP Resume 계약(ephemeral/stored/explicit resume)·세션 신원 안정화(설치 단위 salt)·durable 큐 resume 수락(관찰된 세션만)·실제 edit 도구 실증: 같은 actor·세대 1→2, 실 OMP E2E + 운영 스택 실증 + 계약 테스트 4종 | **4d1a45d**+**f7f741b**+**b8e84a0**, [CI39181391934](https://github.com/choiyoh/ai-pixel-office/actions/runs/39181391934)·[39183152373](https://github.com/choiyoh/ai-pixel-office/actions/runs/39183152373) |
+| P2-B.6 ④ | Windows 플랫폼 경로: `omp.exe`(bun 셰임) 설치·`omp/18.12.2` 실행·**셸 없는 3형태 스폰**·옵저버가 session.start/execution.end 관찰(macOS 대조 동일), 래퍼 수정 불필요. 실 모델 왕복은 자격증명 경계 | **1159259**, [CI39186534438](https://github.com/choiyoh/ai-pixel-office/actions/runs/39186534438) |
 
 P2-A.4의 실제 Mac PASS: ANIMATION_PASS, SESSION_RESUME_PASS, MAC_LIVE_PASS, CROSS_PLATFORM_CI_PASS. 실제 Claude Read/Edit와 generation1→2→3·좌석 유지·새로고침·서버 재시작·별도 독립 세션을 확인했습니다.
 
@@ -457,9 +458,15 @@ Claude 조상 실행 증명(pid/birth)을 OMP `session.start`에 부착하고, �
 
 관찰 래퍼가 **ephemeral fresh / stored fresh / explicit resume** 세 형태를 받고, resume 실행이 `startSource: "resume"`으로 ledger에 도달합니다. native 세션 신원 해시 키를 설치 단위 salt로 안정화해 같은 세션이 **같은 actor·세대 +1**로 이어지며(원본 native id는 계속 미전송), durable 큐도 **관찰된 세션의 resume**만 수락합니다. 실제 edit 도구 동작과 운영 스택(Bridge 4183) resume 실증까지 완료했습니다(세대 1→2, 같은 세션·같은 actor). 세부는 `docs/P2-B.6-OMP-RESUME-AND-EDIT.md`. Bridge는 2026-10-19 09:12 KST에 재시작해 ③을 적용했고(90172), 이후 outbox 수정은 클라이언트 경로라 재시작이 필요 없습니다.
 
-### 별도 과제: 다른 OS native 실행
+### ④ Windows native 실행 — 플랫폼 경로 검증 완료, 실 모델 왕복만 남음
 
-Windows/Linux 실제 OMP·DeepSeek 연결은 미검증입니다. CI 성공을 그 증거로 사용하지 않으며 설치/인증·모델 변경은 별도 범위와 승인이 필요합니다. 세션 import/extension/profile은 계속 미지원(거부)이며, 운영 위임 정의는 여전히 ephemeral(`--no-session`)입니다.
+`docs/P2-B.6-WINDOWS-NATIVE.md`에 실측 근거를 정리했습니다(run [39186534438](https://github.com/choiyoh/ai-pixel-office/actions/runs/39186534438)).
+
+- Windows에서 OMP는 **`omp.exe`(bun 셰임)** + `cli.js`로 설치되고 `omp/18.12.2`가 실행됩니다.
+- 관찰 래퍼가 **셸 없이 3형태 모두 스폰**합니다(PATH · 절대 경로 `omp.exe` · `bun.exe`+`cli.js`) → 옵저버의 "셸 폴백 금지" 규칙과 충돌하지 않아 **래퍼 수정이 불필요**했습니다.
+- 옵저버가 `session.start` → `execution.end`를 관찰합니다(macOS 대조군과 동일). `execution.end`는 자격증명 부재로 턴 시작 전 종료한 결과이며 오류가 아닙니다.
+- **남은 것**: Windows에서의 실 모델 왕복. 러너에 Command Code 자격증명이 없어 `No API key found`로 끝납니다. 키 등록(CI secret)은 저장소 소유자 결정이며 이 저장소는 키를 커밋하지 않습니다. 리눅스는 사용자 지시로 우선순위가 아닙니다(매트릭스에 `ubuntu-latest` 한 줄로 재현 가능).
+- 세션 import/extension/profile은 계속 미지원(거부)이며, 운영 위임 정의는 여전히 ephemeral(`--no-session`)입니다.
 
 ## 16. 다음 에이전트가 피해야 할 실수
 
