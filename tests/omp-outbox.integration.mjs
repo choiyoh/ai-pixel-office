@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { openOmpOutbox, replayOmpOutbox } from "../platform/omp-outbox.mjs";
 import { createProviderBridgeApp } from "../server/bridge/app.mjs";
@@ -42,10 +43,14 @@ async function setup() {
     },
   };
 }
-function events(installationInstanceId, at = new Date().toISOString()) {
+function events(
+  installationInstanceId,
+  at = new Date().toISOString(),
+  sessionId = "a".repeat(64),
+) {
   const ctx = {
     installationInstanceId,
-    nativeSessionId: "a".repeat(64),
+    nativeSessionId: sessionId,
     executionId: randomUUID(),
     logicalTaskId: randomUUID(),
     startSource: "startup",
@@ -468,6 +473,103 @@ test("receiver rejection is reported separately from offline and cannot delete a
     await f.close();
     await f.start();
     assert.equal((await replayOmpOutbox(f)).pending, 0);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("two writers racing the same queue each reserve their own slot without losing events", async () => {
+  const f = await setup();
+  try {
+    const writer = path.join(f.root, "writer.mjs"),
+      outboxUrl = new URL("../platform/omp-outbox.mjs", import.meta.url).href,
+      ompUrl = new URL("../server/bridge/omp.mjs", import.meta.url).href;
+    fs.writeFileSync(
+      writer,
+      `
+import { openOmpOutbox } from ${JSON.stringify(outboxUrl)};
+import { ompStreamEvent, ompExitEvent } from ${JSON.stringify(ompUrl)};
+import { randomUUID } from "node:crypto";
+const [directory, bridgeDirectory, tag] = process.argv.slice(2);
+const outbox = openOmpOutbox({ directory, bridgeDirectory });
+const ctx = {
+  installationInstanceId: outbox.installationInstanceId,
+  nativeSessionId: tag.repeat(64),
+  executionId: randomUUID(),
+  logicalTaskId: randomUUID(),
+  startSource: "startup",
+  modelFamily: "deepseek",
+  modelProvider: "commandcode",
+};
+let sequence = 0;
+const meta = () => ({
+  ...ctx,
+  eventId: randomUUID(),
+  sequence: ++sequence,
+  occurredAt: new Date().toISOString(),
+});
+for (const event of [
+  ompStreamEvent({ type: "session" }, meta()),
+  ompStreamEvent({ type: "agent_end" }, meta()),
+  ompExitEvent(meta(), { exitCode: 0 }),
+])
+  await outbox.send(event);
+process.exit(0);
+`,
+    );
+    const run = (tag) =>
+      new Promise((resolve) => {
+        const child = spawn(
+          process.execPath,
+          [writer, f.directory, f.bridgeDirectory, tag],
+          { stdio: ["ignore", "pipe", "pipe"] },
+        );
+        let out = "";
+        child.stdout.on("data", (d) => (out += d));
+        child.stderr.on("data", (d) => (out += d));
+        child.on("close", (code) => resolve({ code, out }));
+      });
+    // Two real processes start together; the mkdir-based slot reservation must
+    // hand them different runs rather than racing into one.
+    const [one, two] = await Promise.all([run("a"), run("b")]);
+    assert.equal(one.code, 0, one.out);
+    assert.equal(two.code, 0, two.out);
+    const slots = fs
+      .readdirSync(f.directory)
+      .filter((n) => /^run-\d{4}$/.test(n));
+    assert.equal(slots.length, 2);
+    const replay = await replayOmpOutbox(f);
+    assert.equal(replay.delivered, 6);
+    assert.equal(replay.pending, 0);
+    assert.equal(replay.blockedRuns, 0);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("a bridge restart mid-run queues the live stream and lets a new run flow immediately", async () => {
+  const f = await setup();
+  try {
+    const first = openOmpOutbox(f),
+      a = events(first.installationInstanceId);
+    await first.send(a[0]); // delivered while the bridge is up
+    // The bridge restarts while execution A is still running: its own instance
+    // keeps the original binding, so the rest of the stream cannot reach it.
+    await f.close();
+    await f.start();
+    for (let i = 1; i < a.length; i++) await first.send(a[i]);
+    // A fresh run binds the restarted bridge through the refreshed transport.
+    const second = openOmpOutbox(f),
+      b = events(second.installationInstanceId, new Date().toISOString(), "b".repeat(64));
+    for (const event of b) await second.send(event);
+    const replay = await replayOmpOutbox(f);
+    // Nothing may stay pending and no run may be blocked; the exact delivered
+    // count also includes events the bridge had already committed, because the
+    // replay re-offers the whole unacknowledged tail and the bridge dedupes on
+    // receipt (covered by the receipts test).
+    assert.equal(replay.pending, 0);
+    assert.equal(replay.blockedRuns, 0);
+    assert.ok(replay.delivered >= 4, `delivered ${replay.delivered}`);
   } finally {
     await f.cleanup();
   }

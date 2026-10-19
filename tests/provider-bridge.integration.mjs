@@ -701,3 +701,73 @@ test("bridge refuses a public or symlinked namespace before creating a ledger", 
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("two executions streaming at once never cross sequences, actors or terminals", () => {
+  const f = fixture();
+  try {
+    const p = f.bridge.principal("command-code");
+    const A = producer(p, { nativeSessionId: "PRIVATE-A" }),
+      B = producer(p, { nativeSessionId: "PRIVATE-B" });
+    const plan = (make) => [
+      make(1, "session.start"),
+      make(2, "tool.start"),
+      make(3, "tool.end"),
+      make(4, "turn.end"),
+      make(5, "execution.end"),
+    ];
+    const a = plan(A),
+      b = plan(B);
+    // Two subprocesses write at their own pace, so the bridge sees the streams
+    // interleaved rather than one run after another. Both use call-2 as their
+    // first tool call: equal native IDs must stay inside their own execution.
+    for (let step = 0; step < 5; step++) {
+      f.bridge.receive(a[step], p);
+      f.bridge.receive(b[step], p);
+      if (step === 0) {
+        const mid = f.bridge.snapshot();
+        assert.equal(mid.actors.length, 2);
+        assert.equal(new Set(mid.actors.map((x) => x.renderId)).size, 2);
+      }
+    }
+    assert.equal(f.bridge.snapshot().actors.length, 0);
+    const ledger = JSON.parse(
+      fs.readFileSync(path.join(f.config.directory, "provider-bridge.json")),
+    );
+    const executions = Object.values(ledger.executions).filter((e) => e.started);
+    assert.equal(executions.length, 2);
+    assert.equal(executions.filter((e) => e.terminal).length, 2);
+    assert.equal(new Set(executions.map((e) => e.sessionKey)).size, 2);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("a finished execution cannot swallow the other stream, and neither revives", () => {
+  const f = fixture();
+  try {
+    const p = f.bridge.principal("command-code");
+    const A = producer(p, { nativeSessionId: "PRIVATE-A" }),
+      B = producer(p, { nativeSessionId: "PRIVATE-B" });
+    f.bridge.receive(A(1, "session.start"), p);
+    f.bridge.receive(B(1, "session.start"), p);
+    // B finishes first while A is still mid-tool.
+    f.bridge.receive(B(2, "tool.start"), p);
+    f.bridge.receive(B(3, "tool.end"), p);
+    f.bridge.receive(B(4, "turn.end"), p);
+    f.bridge.receive(B(5, "execution.end"), p);
+    assert.equal(f.bridge.snapshot().actors.length, 1);
+    // A keeps working; B's terminal must not reach across.
+    f.bridge.receive(A(2, "tool.start"), p);
+    f.bridge.receive(A(3, "tool.end"), p);
+    assert.equal(f.bridge.snapshot().actors.length, 1);
+    assert.throws(
+      () => f.bridge.receive(B(6, "tool.start"), p),
+      code(409, "terminal-execution"),
+    );
+    f.bridge.receive(A(4, "turn.end"), p);
+    f.bridge.receive(A(5, "execution.end"), p);
+    assert.equal(f.bridge.snapshot().actors.length, 0);
+  } finally {
+    f.cleanup();
+  }
+});

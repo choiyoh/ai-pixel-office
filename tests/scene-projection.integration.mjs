@@ -196,3 +196,55 @@ test("the merged timeline is ordered newest first and capped", () => {
   });
   assert.equal(many.timeline.length, 60);
 });
+
+test("several actors per channel keep distinct scene keys and all reach the merged timeline", () => {
+  const claude = claudeSnapshot(),
+    omp = ompSnapshot();
+  claude.actors = [
+    claude.actors[0],
+    {
+      ...claude.actors[0],
+      actorId: "claude-actor-2",
+      renderId: 2,
+      palette: 1,
+      name: "Claude · 002",
+    },
+  ];
+  claude.timeline = [
+    claude.timeline[0],
+    {
+      ...claude.timeline[0],
+      actorId: "claude-actor-2",
+      revision: 8,
+      at: "2026-10-18T00:01:00Z",
+    },
+  ];
+  omp.actors = [
+    omp.actors[0],
+    {
+      ...omp.actors[0],
+      actorId: "omp-actor-2",
+      renderId: 2,
+      palette: 3,
+      name: "OMP · 002",
+    },
+  ];
+  omp.timeline = [
+    omp.timeline[0],
+    {
+      ...omp.timeline[0],
+      actorId: "omp-actor-2",
+      revision: 4,
+      // OMP rows carry receivedAt; the projection maps it into the merged at.
+      receivedAt: "2026-10-18T00:02:00Z",
+    },
+  ];
+  // Four sessions at once — two per channel — must each get their own seat and
+  // their own scene key, and the merged timeline must keep every one of them.
+  const scene = projectScene({ claude, omp });
+  assert.equal(scene.actors.length, 4);
+  const ids = scene.actors.map((a) => a.sceneId).sort((x, y) => x - y);
+  assert.deepEqual(ids, [1, 2, 1000001, 1000002]);
+  assert.equal(scene.timeline.length, 4);
+  assert.equal(scene.timeline[0].at, "2026-10-18T00:02:00Z");
+});
