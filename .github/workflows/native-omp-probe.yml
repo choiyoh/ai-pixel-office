@@ -7,6 +7,13 @@ name: native OMP probe (dispatch only)
 # difference is attributable to the platform rather than to the script.
 on:
   workflow_dispatch:
+  # The dispatch API only sees workflows on the default branch, so this one also
+  # triggers from the branch that carries it, and only when the probe itself
+  # changes — never on unrelated pushes.
+  push:
+    paths:
+      - .github/workflows/native-omp-probe.yml
+      - scripts/omp-native-probe.mjs
 
 jobs:
   probe:
