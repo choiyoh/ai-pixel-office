@@ -87,10 +87,21 @@ report.candidates = {
 report.candidates.omp = report.candidates.omp.filter((p) => fs.existsSync(p));
 report.candidates.bun = report.candidates.bun.filter((p) => fs.existsSync(p));
 const npmPrefix = spawnSync("npm", ["prefix", "-g"], { encoding: "utf8", shell: false });
+report.npmPrefix = npmPrefix.status === 0 ? npmPrefix.stdout.trim() : { status: npmPrefix.status };
 if (npmPrefix.status === 0) {
-  const npmBun = path.join(npmPrefix.stdout.trim(), process.platform === "win32" ? "bun.exe" : "bin/bun");
-  if (fs.existsSync(npmBun)) report.candidates.bun.push(npmBun);
+  const prefix = npmPrefix.stdout.trim();
+  for (const relative of [
+    process.platform === "win32" ? "bun.exe" : "bin/bun",
+    process.platform === "win32" ? "bun.cmd" : "bin/bun.cmd",
+    "bun.exe",
+    "bun",
+  ]) {
+    const npmBun = path.join(prefix, relative);
+    if (fs.existsSync(npmBun)) report.candidates.bun.push(npmBun);
+  }
 }
+const whereBun = which("bun");
+report.whichBun = (whereBun.stdout || "").trim() || { status: whereBun.status };
 
 // The exact launch shape the omp-deepseek delegation uses, minus the task.
 const probeArgs = [
@@ -140,6 +151,36 @@ for (const bunCandidate of report.candidates.bun) {
     launcherPrefix: [cli],
   });
 }
+
+// The observer reports only that stderr was seen; the decisive evidence is the
+// child's own output, so run each candidate directly and keep the tail. This is
+// why the probe is CI-only: a credentialed machine would print a real answer.
+report.direct = report.candidates.omp.map((candidate) => {
+  const version = spawnSync(candidate, ["--version"], {
+    encoding: "utf8",
+    shell: false,
+    timeout: 60000,
+  });
+  const run = spawnSync(candidate, probeArgs, {
+    encoding: "utf8",
+    shell: false,
+    timeout: 120000,
+    input: "",
+  });
+  return {
+    candidate,
+    version: {
+      status: version.status,
+      stdout: (version.stdout || "").trim().slice(0, 200),
+      stderr: (version.stderr || "").trim().slice(0, 200),
+    },
+    run: {
+      status: run.status,
+      stdoutTail: (run.stdout || "").trim().slice(-400),
+      stderrTail: (run.stderr || "").trim().slice(-400),
+    },
+  };
+});
 
 fs.mkdirSync(path.join(root, "artifacts"), { recursive: true });
 const file = path.join(
