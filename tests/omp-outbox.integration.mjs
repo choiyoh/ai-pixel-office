@@ -308,6 +308,56 @@ test("durable queue has an explicit per-execution capacity and refuses unobserve
   }
 });
 
+test("a resume is accepted only for a session the queue already observed", async () => {
+  const f = await setup();
+  try {
+    const [start] = events(openOmpOutbox(f).installationInstanceId);
+    const first = openOmpOutbox(f);
+    // Unseen resume stays refused, exactly as before.
+    await assert.rejects(() => first.send({ ...start, startSource: "resume" }));
+    await first.send(start);
+    await first.send({
+      ...start,
+      eventId: randomUUID(),
+      sequence: 2,
+      kind: "turn.end",
+      startSource: undefined,
+    });
+    await first.send({
+      ...start,
+      eventId: randomUUID(),
+      sequence: 3,
+      kind: "execution.end",
+      startSource: undefined,
+      processOutcome: "exited-zero",
+    });
+    // A new process resuming the observed session is queued as its own run.
+    const resumes = openOmpOutbox(f);
+    const resumed = {
+      ...start,
+      startSource: "resume",
+      executionId: randomUUID(),
+      logicalTaskId: randomUUID(),
+      eventId: randomUUID(),
+      sequence: 1,
+    };
+    const receipt = await resumes.send(resumed);
+    assert.equal(receipt.accepted, true);
+    assert.equal(receipt.disposition, "queued");
+    // A session this queue never saw is still refused.
+    const other = openOmpOutbox(f);
+    await assert.rejects(() =>
+      other.send({
+        ...resumed,
+        nativeSessionId: "f".repeat(64),
+        eventId: randomUUID(),
+      }),
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("batch auth, body bounds, committed prefix and exact retry preserve the receiver contract", async () => {
   const f = await setup();
   try {

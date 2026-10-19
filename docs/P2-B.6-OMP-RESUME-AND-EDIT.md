@@ -8,6 +8,7 @@
 - 관찰 래퍼 `platform/observe-omp.mjs`의 착수 계약을 **3모드**(ephemeral fresh / stored fresh / explicit resume)로 확장하고, 이벤트 변환 `server/bridge/omp.mjs`가 `startSource: "resume"`을 통과시키게 했다. Bridge ledger는 이미 `resume` 시맨틱(세대 증가·actor 유지)을 갖고 있어서 손대지 않았다.
 - 결손 하나를 추가로 고쳤다: native 세션 신원 해시 키가 **실행마다 랜덤**이라 같은 세션도 매번 다른 actor가 됐다. 설치 단위 salt로 안정화했다(원본 native id는 계속 전송되지 않는다).
 - 실증(래퍼 경유 실 OMP E2E): `session.start(startSource=resume)` → **같은 actor**, **generation 1→2**, 그리고 실제 **edit** 도구가 파일을 `orbit resume works` → `orbit resume works\nresumed ok`로 수정.
+- **운영 스택**까지 실증(실 OMP + durable outbox + 실 Bridge 4183): 저장 실행과 resume이 **같은 세션 키·같은 actor**로 이어지고 generation 1→2가 Bridge 원장에 기록됐다. 이 과정에서 큐의 fresh 전용 게이트 2곳을 찾아 고쳤다(§3.5).
 
 ## 1. OMP 18.10.0 실제 계약 (실측)
 
@@ -70,7 +71,15 @@ if (!["startup", "resume"].includes(startSource)) throw bridgeError(422, "omp-fr
 event.startSource = startSource;
 ```
 
-### 3.4 변경하지 않은 것
+### 3.4 `platform/omp-outbox.mjs` — 큐가 resume을 이해하게 (운영 경로에서 발견)
+
+E2E(fixture bridge)는 통과했지만 **운영 스택**에서는 resume 이벤트가 큐에서 거부됐다. 두 게이트를 고쳤다.
+
+- `canonical()`이 `session.start`의 `startSource`를 `startup`만 허용했다 → `startup|resume`으로 확장.
+- 무조건 허용하지는 않는다: run을 여는 시점에 **이 큐가 이미 관찰한 세션**의 resume만 받는다(`observedSession`, 기존 run의 `owner.json` 대조). 처음 보는 세션을 resume으로 시작하면 예전과 동일하게 거부된다(테스트로 고정).
+- 큐잉 이벤트의 기록 규칙(이벤트 파일·소유자·완료 마커·전송 재시도)은 그대로다.
+
+### 3.5 변경하지 않은 것 (서버 측)
 
 - `server/bridge/ledger.mjs`: 이미 `sessionKey = hash(providerId, installationInstanceId, nativeSessionId)`와 `resume` 재사용 규칙(이전 execution이 terminal일 때만, `generation++`, 64 세대 상한)을 갖고 있다.
 - `server/bridge/schema.mjs`: `startSource` enum이 이미 `startup|resume|clear`다.
@@ -95,13 +104,27 @@ hello-e2e.txt: "orbit resume works\nresumed ok"
 - 같은 native 신원 → **actor 1명 유지**, 세대 1→2(resume 재사용 경로), 종료 후 활성 actor 0.
 - 실제 edit 도구가 파일을 수정(내용 증거 위).
 
-### 4.3 자동 회귀
+### 4.3 운영 스택 실증 (실 OMP + durable outbox + Bridge 4183)
 
-- 단위 **32/32**, 통합 **62 pass / 4 skip(Windows 전용) / 0 fail**.
-- 신규 테스트 3종:
+```
+revision 137  cbe7b6b1  gen 1  execution.end     ← 저장 실행(09:46)
+revision 138  cbe7b6b1  gen 2  session.start     ← resume(09:56)
+revision 139…142 cbe7b6b1 gen 2 tool/turn/end
+session 02d3449b80 → actor cbe7b6b1, generation 2
+replay 보고: {"delivered":5,"pending":0,"blockedRuns":0,"rejected":false}
+```
+
+- 같은 세션·같은 actor로 이어졌고, 큐가 비었으며(pending 0) 거부도 없었다.
+- 같은 수정 뒤 실제 위임(fresh ephemeral) 1회가 정상적으로 위임 링크(`Claude · 0NN` → `OMP · 0NN`)를 만들었다 — fresh 경로 회귀 없음.
+
+### 4.4 자동 회귀
+
+- 단위 **32/32**, 통합 **63 pass / 4 skip(Windows 전용) / 0 fail**.
+- 신규 테스트 4종:
   - resume 계약 수락/거부(ephemeral·session-dir·id 누락·`--continue`·`--profile` 거부, 수락 시 `startSource=resume`이 ledger까지 도달).
   - 세션 신원이 실행 간 안정·설치 단위 scoped이며 원본 id 미노출.
   - 설치 id 미보고 시 기존 실행별 랜덤 동작 유지.
+  - 큐가 **관찰한 세션의 resume만** 수락(미관찰 resume은 계속 거부).
 - `lint`, `typecheck`, `check:source` 통과.
 
 ## 5. 재현 절차
@@ -120,11 +143,11 @@ node scripts/observe-omp-durable.mjs -- -p "Read hello-e2e.txt and append a seco
 node scripts/omp-resume-e2e.mjs [work-root]
 ```
 
-## 6. 운영 적용 범위 (승인 대상)
+## 6. 운영 적용 상태
 
-- 코드 변경 파일 중 **Bridge가 로드하는 것은 `server/bridge/omp.mjs` 하나**다 → Bridge(4183) 재시작이 필요하다.
-- 웹(4173)은 변경 파일을 로드하지 않는다(무재시작). ledger 스키마·Hook·전역 설정도 무변경이다.
-- 운영 위임 정의(`omp-deepseek`)는 계속 **ephemeral**(`--no-session`)을 쓴다. 저장/resume을 위임 기본값으로 쓰려면 정의 Diff가 필요하므로, 필요해지면 별도로 제출한다.
+- 2026-10-19 09:12 KST에 Bridge(4183)를 재시작해 서버 측 변경(`server/bridge/omp.mjs`)을 적용했다 — 새 PID **90172**, ledger 설치 id `53efa927` 유지, outbox 정상.
+- 이후 추가 수정(`platform/omp-outbox.mjs`)은 **클라이언트(래퍼) 경로**다: 래퍼는 실행마다 최신 파일을 읽으므로 재시작이 필요 없고, 서버는 outbox의 읽기 경로만 쓴다.
+- 웹(4173)·Hook·전역 설정·자격증명: **무변경**. 운영 위임 정의는 계속 ephemeral(`--no-session`)이다.
 
 ## 7. 남은 것
 

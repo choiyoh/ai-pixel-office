@@ -84,7 +84,11 @@ function canonical(event, b) {
   if (
     e.providerId !== "omp" ||
     e.actorRole !== "executor" ||
-    (e.kind === "session.start" && e.startSource !== "startup") ||
+    // A stored session may be resumed: the observer only marks resume runs
+    // from reviewed launch arguments, so both sources are valid here while
+    // anything else stays refused.
+    (e.kind === "session.start" &&
+      !["startup", "resume"].includes(e.startSource)) ||
     !hex(e.nativeSessionId) ||
     e.parentTaskId !== undefined ||
     e.delegationId !== undefined ||
@@ -117,6 +121,29 @@ function row(file, b, owner) {
 }
 const eventName = (e) =>
   `${String(e.sequence).padStart(7, "0")}-${e.eventId}.event.json`;
+// A resume must continue a session this queue already observed; otherwise the
+// queue would be inventing a history it never saw.
+function observedSession(directory, nativeSessionId) {
+  let names;
+  try {
+    names = fs.readdirSync(directory);
+  } catch {
+    return false;
+  }
+  for (const name of names) {
+    if (!/^run-\d{4}$/.test(name)) continue;
+    try {
+      if (
+        ownerRecord(path.join(directory, name)).nativeSessionId ===
+        nativeSessionId
+      )
+        return true;
+    } catch {
+      /* An unreadable run is not evidence of the session. */
+    }
+  }
+  return false;
+}
 function ownerRecord(directory) {
   const o = read(path.join(directory, "owner.json"));
   if (
@@ -184,6 +211,11 @@ export function openOmpOutbox({
         fail();
       if (!run) {
         if (e.kind !== "session.start" || e.sequence !== 1) fail();
+        if (
+          e.startSource === "resume" &&
+          !observedSession(directory, e.nativeSessionId)
+        )
+          fail();
         for (let i = 0; i < 1024; i++) {
           const candidate = path.join(
             directory,
