@@ -45,6 +45,12 @@ jobs:
           bun add -g @oh-my-pi/pi-coding-agent
           omp --version
       - name: Probe native OMP shape and spawn
+        env:
+          # Names verified in the OMP bundle: the commandcode provider reads
+          # COMMAND_CODE_API_KEY (falling back to COMMANDCODE_API_KEY). Without
+          # the secret this step still passes and records an auth failure, which
+          # is the probe's documented boundary rather than an error.
+          COMMAND_CODE_API_KEY: ${{ secrets.COMMAND_CODE_API_KEY }}
         run: node scripts/omp-native-probe.mjs
       - uses: actions/upload-artifact@v4
         if: always()

@@ -104,16 +104,33 @@ if (npmPrefix.status === 0) {
 const whereBun = which("bun");
 report.whichBun = (whereBun.stdout || "").trim() || { status: whereBun.status };
 
-// The exact launch shape the omp-deepseek delegation uses, minus the task.
-const probeArgs = [
-  "-p",
-  "--model",
-  "deepseek/deepseek-v4.1-flash",
+// Two shapes are recorded. The first is the omp-deepseek delegation verbatim;
+// the second pins the provider, because a runner holding only a Command Code
+// credential may need it explicit before deepseek/* resolves there (the first
+// probe run resolved it to openrouter and stopped for a missing key).
+const tail = [
   "--no-session",
   "--no-extensions",
   "--max-time",
   "1m",
   "Reply with OK only.",
+];
+const shapes = [
+  {
+    label: "delegation shape",
+    args: ["-p", "--model", "deepseek/deepseek-v4.1-flash", ...tail],
+  },
+  {
+    label: "provider pinned",
+    args: [
+      "-p",
+      "--provider",
+      "commandcode",
+      "--model",
+      "deepseek/deepseek-v4.1-flash",
+      ...tail,
+    ],
+  },
 ];
 
 // PROBE_SKIP_RUNS=1 exercises the resolution half locally without launching
@@ -127,7 +144,7 @@ const attempt = async (label, options) => {
   }
   try {
     const result = await observeOmp({
-      args: probeArgs,
+      args: options.args,
       input: Buffer.from(""),
       ...options,
     });
@@ -150,50 +167,61 @@ const attempt = async (label, options) => {
 const delimiter = process.platform === "win32" ? ";" : ":";
 process.env.PATH = `${binDir}${delimiter}${process.env.PATH ?? ""}`;
 
-await attempt("executable=omp (PATH incl. bun bin)", { executable: "omp" });
-for (const candidate of report.candidates.omp)
-  await attempt(`executable=${candidate}`, { executable: candidate });
-for (const bunCandidate of report.candidates.bun) {
-  if (!fs.existsSync(cli)) break;
-  await attempt(`executable=${bunCandidate} + cli launcher`, {
-    executable: bunCandidate,
-    launcherPrefix: [cli],
+// Absolute shapes (bun + cli.js) were proven in run 39186534438; this pass
+// records both launch shapes through PATH and the absolute shim only, which
+// keeps a credentialed run down to a handful of cheap calls.
+for (const shape of shapes) {
+  await attempt(`[${shape.label}] executable=omp (PATH incl. bun bin)`, {
+    executable: "omp",
+    args: shape.args,
   });
+  const absoluteOmp = report.candidates.omp[0];
+  if (absoluteOmp)
+    await attempt(`[${shape.label}] executable=${absoluteOmp}`, {
+      executable: absoluteOmp,
+      args: shape.args,
+    });
 }
 
 // The observer reports only that stderr was seen; the decisive evidence is the
 // child's own output, so run each candidate directly and keep the tail. This is
 // why the probe is CI-only: a credentialed machine would print a real answer.
 report.direct = skipRuns
-  ? report.candidates.omp.map((candidate) => ({
-      candidate,
-      skipped: "PROBE_SKIP_RUNS",
-    }))
-  : report.candidates.omp.map((candidate) => {
+  ? report.candidates.omp.flatMap((candidate) =>
+      shapes.map((shape) => ({
+        candidate,
+        shape: shape.label,
+        skipped: "PROBE_SKIP_RUNS",
+      })),
+    )
+  : report.candidates.omp.flatMap((candidate) => {
       const version = spawnSync(candidate, ["--version"], {
         encoding: "utf8",
         shell: false,
         timeout: 60000,
       });
-      const run = spawnSync(candidate, probeArgs, {
-        encoding: "utf8",
-        shell: false,
-        timeout: 120000,
-        input: "",
+      return shapes.map((shape) => {
+        const run = spawnSync(candidate, shape.args, {
+          encoding: "utf8",
+          shell: false,
+          timeout: 120000,
+          input: "",
+        });
+        return {
+          candidate,
+          shape: shape.label,
+          version: {
+            status: version.status,
+            stdout: (version.stdout || "").trim().slice(0, 200),
+            stderr: (version.stderr || "").trim().slice(0, 200),
+          },
+          run: {
+            status: run.status,
+            stdoutTail: (run.stdout || "").trim().slice(-400),
+            stderrTail: (run.stderr || "").trim().slice(-400),
+          },
+        };
       });
-      return {
-        candidate,
-        version: {
-          status: version.status,
-          stdout: (version.stdout || "").trim().slice(0, 200),
-          stderr: (version.stderr || "").trim().slice(0, 200),
-        },
-        run: {
-          status: run.status,
-          stdoutTail: (run.stdout || "").trim().slice(-400),
-          stderrTail: (run.stderr || "").trim().slice(-400),
-        },
-      };
     });
 
 fs.mkdirSync(path.join(root, "artifacts"), { recursive: true });
